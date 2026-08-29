@@ -247,10 +247,13 @@ thead th {
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: #b0b8c4;
-  padding: 0 0 9px;
+  padding: 0 0 6px;
   text-align: center;
-  border-bottom: 1px solid rgba(255,255,255,0.25);
+  border-bottom: none;
   white-space: nowrap;
+}
+thead tr {
+  border-bottom: none;
 }
 thead th.th-rank { width: 28px; }
 thead th.th-team { text-align: left; padding-left: 8px; width: 99%; }
@@ -260,6 +263,9 @@ thead th.th-pts  { text-align: right; width: 54px; min-width: 54px; padding-righ
 tbody tr {
   border-bottom: 1px solid rgba(0,162,187,0.07);
   transition: background 0.15s;
+}
+tbody tr:first-child {
+  border-top: none;
 }
 tbody tr:last-child { border-bottom: none; }
 tbody tr:hover { background: rgba(0,162,187,0.04); }
@@ -272,6 +278,9 @@ tbody tr.leader td:first-child {
   border-left: 3px solid var(--magenta);
   padding-left: 5px;
   box-shadow: inset 3px 0 8px rgba(231,5,126,0.15);
+}
+tbody tr:first-child td {
+  border-top: none;
 }
 
 td {
@@ -412,7 +421,7 @@ td.td-pts.flash {
       "<thead><tr>" +
         "<th class='th-rank'></th>" +
         "<th class='th-team'>Team</th>" +
-        "<th class='th-num'>P</th>" +
+        "<th class='th-num'>MP</th>" +
         "<th class='th-num'>W</th>" +
         "<th class='th-num'>L</th>" +
         "<th class='th-pts'>Pts</th>" +
