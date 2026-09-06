@@ -238,7 +238,8 @@ body {
 table {
   width: 100%;
   border-collapse: collapse;
-  table-layout: auto;
+  table-layout: fixed;
+  width: 100%;
 }
 
 thead th {
@@ -251,14 +252,15 @@ thead th {
   text-align: center;
   border-bottom: none;
   white-space: nowrap;
+  overflow: hidden;
 }
 thead tr {
   border-bottom: none;
 }
 thead th.th-rank { width: 28px; }
-thead th.th-team { text-align: left; padding-left: 8px; width: 99%; }
-thead th.th-num  { width: 42px; min-width: 42px; }
-thead th.th-pts  { text-align: right; width: 54px; min-width: 54px; padding-right: 2px; }
+thead th.th-team { text-align: left; padding-left: 8px; }
+thead th.th-num  { width: 44px; }
+thead th.th-pts  { text-align: right; width: 52px; padding-right: 4px; }
 
 tbody tr {
   border-bottom: 1px solid rgba(0,162,187,0.07);
@@ -284,7 +286,7 @@ tbody tr:first-child td {
 }
 
 td {
-  padding: 10px 6px;
+  padding: 10px 4px;
   vertical-align: middle;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -324,8 +326,7 @@ td.td-num {
   font-size: clamp(12px, 1.1vw, 16px);
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
-  width: 42px;
-  min-width: 42px;
+  width: 44px;
   white-space: nowrap;
   padding: 10px 0;
 }
@@ -335,9 +336,8 @@ td.td-l { color: var(--loss); }
 /* points */
 td.td-pts {
   text-align: right;
-  padding: 10px 2px 10px 0;
-  width: 54px;
-  min-width: 54px;
+  padding: 10px 4px 10px 0;
+  width: 52px;
   white-space: nowrap;
   font-family: "Barlow Condensed", sans-serif;
   font-size: clamp(18px, 2vw, 32px);
