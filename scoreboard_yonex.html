@@ -416,6 +416,22 @@ td.td-pts.flash {
   .logo-center { height: clamp(70px, 20vw, 110px) !important; max-width: 48vw !important; }
   .page-header .logo-left, .page-header .logo-right { height: clamp(24px, 7vw, 40px) !important; }
 }
+
+/* ── stat columns never shrink; long names wrap instead (phones) ── */
+thead th.th-num, td.td-num { width: 40px !important; min-width: 40px !important; }
+thead th.th-pts, td.td-pts { width: 48px !important; min-width: 48px !important; }
+thead th.th-rank, td.td-rank { width: 24px !important; min-width: 24px !important; }
+@media (max-width: 700px) {
+  td.td-team {
+    white-space: normal !important;
+    overflow: visible !important;
+    text-overflow: clip !important;
+    word-break: break-word;
+    line-height: 1.25;
+  }
+  thead th.th-num, td.td-num { width: 36px !important; min-width: 36px !important; }
+  thead th.th-pts, td.td-pts { width: 44px !important; min-width: 44px !important; }
+}
 </style>
 </head>
 <body>
