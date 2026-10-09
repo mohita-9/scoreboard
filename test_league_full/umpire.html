@@ -1,0 +1,843 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#07060c">
+<title>Umpire</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Barlow+Condensed:wght@600;700&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --magenta: #dd0e23; --magenta-dim: rgba(221,14,35,0.15); --magenta-glow: rgba(221,14,35,0.35);
+  --cyan: #0b49d3; --cyan-dim: rgba(11,73,211,0.12); --cyan-glow: rgba(11,73,211,0.35);
+  --bg: #0a0008; --card: rgba(5,0,10,0.60);
+  --text: #f0f2f5; --text-sub: #7a8494; --text-muted: #3a4250;
+  --border: rgba(11,73,211,0.12); --border-hi: rgba(11,73,211,0.28);
+  --ok: #19c37d; --warn: #f5a623; --bad: #ff3b4e;
+}
+html { -webkit-text-size-adjust: 100%; }
+body {
+  min-height: 100vh; color: var(--text); font-family: "Inter", system-ui, sans-serif; font-size: 15px;
+  background-color: #07060c;
+  background-image:
+    radial-gradient(ellipse 80% 80% at -5% 100%, var(--magenta-glow) 0%, transparent 65%),
+    radial-gradient(ellipse 70% 90% at 105% 50%, var(--cyan-glow) 0%, transparent 70%),
+    radial-gradient(ellipse 50% 60% at 50% 50%, rgba(30,10,50,0.5) 0%, transparent 80%);
+  background-attachment: fixed;
+}
+.cond { font-family: "Barlow Condensed", sans-serif; letter-spacing: 0.04em; text-transform: uppercase; }
+.brandbar { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--border); position: relative; }
+.brandbar::after { content: ""; position: absolute; bottom: -1px; left: 50%; transform: translateX(-50%); width: 120px; height: 2px;
+  background: linear-gradient(90deg, var(--magenta), var(--cyan)); border-radius: 2px; }
+.brandbar img { height: 40px; width: auto; object-fit: contain; }
+.brandbar img[src=""] { display: none; }
+.brand-name { font-family: "Barlow Condensed", sans-serif; font-weight: 700; font-size: 24px; letter-spacing: 0.05em; text-transform: uppercase;
+  background: linear-gradient(90deg, var(--magenta) 0%, #a030a0 45%, var(--cyan) 100%); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; line-height: 1; }
+.brand-sub { font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--text-sub); margin-top: 3px; }
+.brandbar .spacer { flex: 1; }
+.card { background: var(--card); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255,255,255,0.1); border-top-color: var(--border-hi); border-radius: 14px; padding: 16px; }
+.btn { appearance: none; border: 1px solid rgba(255,255,255,0.16); background: rgba(255,255,255,0.06); color: var(--text);
+  font: 600 15px "Inter", sans-serif; padding: 12px 16px; border-radius: 10px; cursor: pointer; min-height: 44px; }
+.btn:hover { background: rgba(255,255,255,0.1); }
+.btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.btn.primary { background: linear-gradient(90deg, var(--magenta), var(--cyan)); border-color: transparent; color: #fff; }
+.btn.red { background: var(--magenta); border-color: var(--magenta); color: #fff; }
+.btn.blue { background: var(--cyan); border-color: var(--cyan); color: #fff; }
+.btn.ghost { background: transparent; }
+.btn.small { min-height: 32px; padding: 6px 10px; font-size: 13px; }
+input, select, textarea { font: 15px "Inter", sans-serif; color: var(--text); background: rgba(0,0,0,0.35);
+  border: 1px solid rgba(255,255,255,0.16); border-radius: 10px; padding: 11px 12px; width: 100%; min-height: 44px; }
+select option { background: #111; }
+label { display: block; font-size: 12px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-sub); margin: 12px 0 6px; }
+.muted { color: var(--text-sub); }
+.pill { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;
+  padding: 3px 9px; border-radius: 20px; border: 1px solid var(--text-muted); color: var(--text-sub); white-space: nowrap; }
+.pill.live { border-color: var(--magenta); color: #fff; background: var(--magenta-dim); }
+.pill.done { border-color: var(--cyan); color: #cfe0ff; background: var(--cyan-dim); }
+.pill.golden { border-color: #ffd34d; color: #ffd34d; background: rgba(255,211,77,0.12); }
+.pill.stale { border-color: var(--bad); color: #fff; background: var(--bad); }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; display: inline-block; }
+.live .dot { animation: blink 1.4s ease-in-out infinite; }
+@keyframes blink { 0%,100% { opacity: 1 } 50% { opacity: .25 } }
+.toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: #15121e; border: 1px solid var(--border-hi);
+  padding: 12px 18px; border-radius: 12px; z-index: 50; max-width: 92vw; box-shadow: 0 10px 40px rgba(0,0,0,.5); display: none; }
+.toast.show { display: block; }
+.toast.err { border-color: var(--bad); }
+.modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,0.7); display: none; align-items: center; justify-content: center; z-index: 40; padding: 16px; }
+.modal-bg.show { display: flex; }
+.modal { width: 100%; max-width: 520px; max-height: 90vh; overflow: auto; }
+.modal h3 { font-family: "Barlow Condensed", sans-serif; font-size: 26px; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px; }
+.row { display: flex; gap: 10px; align-items: center; }
+.row > * { flex: 1; }
+.hidden { display: none !important; }
+.err-text { color: #ff8a95; font-size: 14px; margin-top: 10px; min-height: 18px; white-space: pre-line; }
+
+main { max-width: 560px; margin: 0 auto; padding: 14px 14px 120px; }
+.sync { position: sticky; top: 0; z-index: 30; display: flex; align-items: center; justify-content: center; gap: 8px;
+  font-weight: 700; font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; padding: 7px 10px; }
+.sync.saved { background: rgba(25,195,125,0.15); color: var(--ok); border-bottom: 1px solid rgba(25,195,125,0.35); }
+.sync.saving { background: rgba(245,166,35,0.16); color: var(--warn); border-bottom: 1px solid rgba(245,166,35,0.4); }
+.sync.error { background: var(--bad); color: #fff; font-size: 15px; padding: 12px 10px; animation: pulseBg 1.2s ease-in-out infinite; }
+@keyframes pulseBg { 0%,100% { filter: brightness(1) } 50% { filter: brightness(1.25) } }
+h2.sec { font-family: "Barlow Condensed", sans-serif; font-size: 18px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-sub);
+  margin: 18px 0 8px; display: flex; align-items: center; gap: 10px; }
+h2.sec::after { content: ""; flex: 1; height: 1px; background: linear-gradient(90deg, var(--border-hi), transparent); }
+.mcard { display: block; width: 100%; text-align: left; margin-bottom: 10px; cursor: pointer; color: var(--text); font: inherit; }
+.mcard .top { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; color: var(--text-sub); letter-spacing: 0.06em; text-transform: uppercase; }
+.mcard .teams { font-size: 18px; font-weight: 600; margin-top: 6px; line-height: 1.3; }
+.mcard .teams .vs { color: var(--text-muted); font-size: 12px; margin: 0 6px; font-weight: 700; }
+.mcard .sc { font-family: "Barlow Condensed", sans-serif; font-size: 22px; margin-top: 4px; color: var(--text-sub); }
+.mcard.live { border-color: var(--magenta); box-shadow: 0 0 24px var(--magenta-dim); }
+.mcard.done { opacity: 0.7; }
+.empty { color: var(--text-muted); padding: 10px 2px; font-size: 14px; }
+.confirm-teams { text-align: center; padding: 26px 14px; }
+.confirm-teams .t { font-family: "Barlow Condensed", sans-serif; font-size: 34px; font-weight: 700; text-transform: uppercase; line-height: 1.05; word-break: break-word; }
+.confirm-teams .t.a { color: var(--magenta); } .confirm-teams .t.b { color: var(--cyan); }
+.confirm-teams .vs { color: var(--text-muted); font-weight: 700; letter-spacing: .2em; margin: 10px 0; }
+.check { display: flex; gap: 12px; align-items: flex-start; margin: 18px 2px; font-size: 16px; text-transform: none; letter-spacing: 0; color: var(--text); font-weight: 500; }
+.check input { width: 26px; height: 26px; min-height: 0; flex: 0 0 auto; accent-color: var(--magenta); }
+.rulebox { font-size: 13px; color: var(--text-sub); text-align: center; margin: 4px 0 10px; }
+.meta { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 12px; color: var(--text-sub); text-transform: uppercase; letter-spacing: 0.08em; }
+.setsrow { display: flex; justify-content: center; gap: 8px; margin: 10px 0; flex-wrap: wrap; }
+.setchip { font-family: "Barlow Condensed", sans-serif; font-size: 18px; padding: 4px 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.12); color: var(--text-sub); }
+.setchip.cur { border-color: #fff; color: #fff; }
+.setchip.wa { border-color: var(--magenta); color: #fff; background: var(--magenta-dim); }
+.setchip.wb { border-color: var(--cyan); color: #fff; background: var(--cyan-dim); }
+.golden { display: none; text-align: center; font-family: "Barlow Condensed", sans-serif; font-weight: 700; font-size: 34px; letter-spacing: 0.12em;
+  color: #1a1200; background: linear-gradient(90deg, #ffcf3d, #fff1a8, #ffcf3d); border-radius: 12px; padding: 8px; margin: 8px 0;
+  box-shadow: 0 0 30px rgba(255,207,61,0.6); animation: gp 0.9s ease-in-out infinite; }
+.golden.show { display: block; }
+@keyframes gp { 0%,100% { transform: scale(1) } 50% { transform: scale(1.03) } }
+.panels { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.panel { border-radius: 16px; padding: 12px 10px; display: flex; flex-direction: column; align-items: stretch; gap: 10px; min-width: 0; }
+.panel.a { background: linear-gradient(180deg, var(--magenta-glow), rgba(0,0,0,0.25)); border: 2px solid var(--magenta); }
+.panel.b { background: linear-gradient(180deg, var(--cyan-glow), rgba(0,0,0,0.25)); border: 2px solid var(--cyan); }
+.panel .name { font-weight: 700; font-size: 15px; text-align: center; min-height: 40px; display: flex; align-items: center; justify-content: center; word-break: break-word; line-height: 1.2; }
+.panel .score { font-family: "Barlow Condensed", sans-serif; font-weight: 700; font-size: 92px; line-height: 0.9; text-align: center; font-variant-numeric: tabular-nums; }
+.panel .sets { text-align: center; font-size: 12px; color: rgba(255,255,255,0.75); letter-spacing: .1em; text-transform: uppercase; }
+.plus, .minus { appearance: none; border: none; border-radius: 14px; color: #fff; font-family: "Barlow Condensed", sans-serif; font-weight: 700; cursor: pointer; touch-action: manipulation; user-select: none; -webkit-user-select: none; }
+.plus { min-height: 110px; font-size: 64px; }
+.minus { min-height: 72px; font-size: 40px; background: rgba(0,0,0,0.35); border: 1px solid rgba(255,255,255,0.18); }
+.panel.a .plus { background: var(--magenta); } .panel.b .plus { background: var(--cyan); }
+.plus:active, .minus:active { transform: scale(0.97); filter: brightness(1.2); }
+.plus:disabled, .minus:disabled { opacity: 0.3; }
+.setwon { display: none; text-align: center; margin: 12px 0; padding: 14px; border-radius: 14px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.16); }
+.setwon.show { display: block; }
+.setwon .big { font-family: "Barlow Condensed", sans-serif; font-size: 28px; font-weight: 700; text-transform: uppercase; margin-bottom: 10px; word-break: break-word; }
+.bottombar { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-top: 14px; }
+.bottombar .btn { min-height: 72px; font-size: 16px; }
+.readonly-note { text-align: center; color: var(--text-sub); margin: 12px 0; }
+.moved { background: var(--bad); color: #fff; padding: 12px; border-radius: 10px; margin: 10px 0; font-weight: 600; text-align: center; }
+</style>
+</head>
+<body data-page="Umpire">
+<header class="brandbar">
+  <img data-brand="logo" src="" alt="">
+  <div><div class="brand-name" data-brand="name">League</div><div class="brand-sub">Umpire</div></div>
+  <span class="spacer"></span>
+  <button class="btn small ghost hidden" id="btn-logout">Log out</button>
+</header>
+<div id="sync" class="sync saved hidden">✓ Saved</div>
+
+<main>
+  <!-- LOGIN -->
+  <section id="v-login" class="hidden">
+    <div class="card" style="margin-top:18px">
+      <label for="in-name">Umpire name</label>
+      <input id="in-name" autocomplete="name" maxlength="40" placeholder="Your name">
+      <label for="in-court">Court</label>
+      <select id="in-court"></select>
+      <label for="in-pin">Court PIN</label>
+      <input id="in-pin" type="password" inputmode="numeric" autocomplete="one-time-code" placeholder="PIN from the referee">
+      <button class="btn primary" id="btn-login" style="width:100%;margin-top:18px">Log in</button>
+      <div class="err-text" id="login-err"></div>
+    </div>
+  </section>
+
+  <!-- COURT VIEW -->
+  <section id="v-court" class="hidden">
+    <div class="meta" style="margin-top:8px"><span id="court-title" class="cond" style="font-size:22px;color:var(--text)"></span><span id="court-upd"></span></div>
+    <h2 class="sec">Now</h2><div id="list-now"></div>
+    <h2 class="sec">Next</h2><div id="list-next"></div>
+    <h2 class="sec">Done</h2><div id="list-done"></div>
+  </section>
+
+  <!-- CONFIRM -->
+  <section id="v-confirm" class="hidden">
+    <div class="card" style="margin-top:18px">
+      <div class="meta"><span id="cf-meta"></span><span id="cf-id"></span></div>
+      <div class="confirm-teams">
+        <div class="t a" id="cf-a"></div><div class="vs">VS</div><div class="t b" id="cf-b"></div>
+      </div>
+      <div class="rulebox" id="cf-rule"></div>
+      <label class="check"><input type="checkbox" id="cf-check"> Confirm teams match the players on court</label>
+      <div class="row">
+        <button class="btn ghost" id="cf-back">Back</button>
+        <button class="btn primary" id="cf-start" disabled>Start Match</button>
+      </div>
+      <div class="err-text" id="cf-err"></div>
+    </div>
+  </section>
+
+  <!-- SCORING -->
+  <section id="v-score" class="hidden">
+    <div class="meta" style="margin-top:6px"><span id="sc-meta"></span><span id="sc-id"></span></div>
+    <div class="rulebox" id="sc-rule"></div>
+    <div id="sc-moved" class="moved hidden"></div>
+    <div class="setsrow" id="sc-sets"></div>
+    <div class="golden" id="sc-golden">⚡ GOLDEN POINT ⚡</div>
+    <div class="panels">
+      <div class="panel a">
+        <div class="name" id="sc-na"></div>
+        <div class="score" id="sc-a">0</div>
+        <div class="sets" id="sc-sa"></div>
+        <button class="plus" id="plus-a" aria-label="Point to team A">+</button>
+        <button class="minus" id="minus-a" aria-label="Remove point from team A">−</button>
+      </div>
+      <div class="panel b">
+        <div class="name" id="sc-nb"></div>
+        <div class="score" id="sc-b">0</div>
+        <div class="sets" id="sc-sb"></div>
+        <button class="plus" id="plus-b" aria-label="Point to team B">+</button>
+        <button class="minus" id="minus-b" aria-label="Remove point from team B">−</button>
+      </div>
+    </div>
+    <div class="setwon" id="sc-setwon">
+      <div class="big" id="sc-setwon-text"></div>
+      <button class="btn primary hidden" id="btn-nextset" style="width:100%;min-height:72px;font-size:20px">Next Set ▶</button>
+      <button class="btn red hidden" id="btn-end2" style="width:100%;min-height:72px;font-size:20px">End Match</button>
+    </div>
+    <div class="readonly-note hidden" id="sc-ro">This match is finished and locked. Only the referee can change it.</div>
+    <div class="bottombar">
+      <button class="btn" id="btn-back">◀ Court</button>
+      <button class="btn" id="btn-undo">↶ Undo</button>
+      <button class="btn red" id="btn-end">End Match</button>
+    </div>
+  </section>
+</main>
+
+<div class="modal-bg" id="modal"><div class="card modal">
+  <h3 id="md-title"></h3>
+  <div id="md-body" style="line-height:1.5"></div>
+  <div class="row" style="margin-top:18px" id="md-actions"></div>
+</div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+// ===== CONFIGURE: your Apps Script web app URL (ends in /exec) =====
+const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxQUhIfJMX-Zql_Sx_AC-PK5hPSVbPDVWCyTDPs5cv6XHdXTAkZYOxtATEawlUxEu_h0A/exec";
+// ==================================================================
+
+/* ==== SHARED SCORING RULES (identical copy on server and every page) ==== */
+var Rules = (function () {
+  // stageRule: { stage, setsToWin, target, cap, deciderTarget, deciderCap }
+  function maxSets(rule) { return rule.setsToWin * 2 - 1; }
+
+  function setLimits(rule, setNo) { // setNo is 1-based
+    var isDecider = rule.setsToWin > 1 && setNo === maxSets(rule);
+    return isDecider ? { T: rule.deciderTarget, C: rule.deciderCap, decider: true }
+                     : { T: rule.target, C: rule.cap, decider: false };
+  }
+
+  function isComplete(a, b, T, C) {
+    var m = Math.max(a, b);
+    return m === C || (m >= T && Math.abs(a - b) >= 2);
+  }
+
+  // Status of a single set score under target T / cap C.
+  function setStatus(a, b, T, C) {
+    var bad = { valid: false, complete: false, winner: null, golden: false };
+    if (!isInt(a) || !isInt(b) || a < 0 || b < 0 || a > C || b > C) return bad;
+    if (isComplete(a, b, T, C)) {
+      if (a === b) return bad;
+      var W = Math.max(a, b), L = Math.min(a, b);
+      if (isComplete(W - 1, L, T, C)) return bad; // set would already have ended earlier
+      return { valid: true, complete: true, winner: a > b ? 'A' : 'B', golden: false };
+    }
+    return { valid: true, complete: false, winner: null, golden: a === b && a === C - 1 };
+  }
+
+  // sets: [[a,b],[a,b],[a,b]] (missing entries treated as 0-0)
+  function matchStatus(rule, sets) {
+    var n = maxSets(rule), setsA = 0, setsB = 0, winner = null, current = null;
+    var per = [];
+    for (var i = 0; i < 3; i++) {
+      var s = sets[i] || [0, 0], a = Number(s[0]) || 0, b = Number(s[1]) || 0;
+      var played = a > 0 || b > 0;
+      if (i >= n) {
+        if (played) return fail('Set ' + (i + 1) + ' is not used in ' + rule.stage);
+        continue;
+      }
+      var lim = setLimits(rule, i + 1);
+      var st = setStatus(a, b, lim.T, lim.C);
+      if (!st.valid) return fail('Set ' + (i + 1) + ' score ' + a + '-' + b + ' is not possible (to ' + lim.T + ', cap ' + lim.C + ')');
+      if (winner && played) return fail('Set ' + (i + 1) + ' played after the match was decided');
+      if (current !== null && played) return fail('Set ' + (i + 1) + ' started before set ' + (current + 1) + ' finished');
+      per.push({ a: a, b: b, T: lim.T, C: lim.C, decider: lim.decider, complete: st.complete, winner: st.winner, golden: st.golden });
+      if (winner) continue;
+      if (st.complete) {
+        if (st.winner === 'A') setsA++; else setsB++;
+        if (setsA === rule.setsToWin) winner = 'A';
+        else if (setsB === rule.setsToWin) winner = 'B';
+      } else if (current === null) {
+        current = i;
+      }
+    }
+    if (winner) current = lastPlayed(per);
+    return { valid: true, error: null, setsA: setsA, setsB: setsB, decided: !!winner, winner: winner,
+             currentSet: current === null ? 0 : current, sets: per };
+  }
+
+  function lastPlayed(per) {
+    for (var i = per.length - 1; i >= 0; i--) if (per[i].a > 0 || per[i].b > 0) return i;
+    return 0;
+  }
+  function fail(msg) { return { valid: false, error: msg }; }
+  function isInt(x) { return typeof x === 'number' && isFinite(x) && Math.floor(x) === x; }
+
+  function describe(rule, setNo) {
+    var lim = setLimits(rule, setNo);
+    var txt = 'To ' + lim.T + (lim.C > lim.T + 1 ? ', win by 2, cap ' + lim.C : ', win by 2') +
+              ', golden point at ' + (lim.C - 1) + '-' + (lim.C - 1);
+    return (rule.setsToWin > 1 ? 'Best of 3. ' : 'Single game. ') + txt;
+  }
+
+  return { maxSets: maxSets, setLimits: setLimits, isComplete: isComplete, setStatus: setStatus,
+           matchStatus: matchStatus, describe: describe };
+})();
+/* ==== END SHARED SCORING RULES ==== */
+
+/* ==== COMMON CLIENT HELPERS ==== */
+function esc(v) {
+  return String(v === undefined || v === null ? '' : v).replace(/[&<>"'`]/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;', '`': '&#96;' }[c];
+  });
+}
+function $(sel, root) { return (root || document).querySelector(sel); }
+function $all(sel, root) { return Array.prototype.slice.call((root || document).querySelectorAll(sel)); }
+
+var Api = {
+  base: function () { return String(APPS_SCRIPT_URL).split('?')[0]; },
+  get: function (params) {
+    var q = Object.keys(params).map(function (k) { return k + '=' + encodeURIComponent(params[k]); }).join('&');
+    return fetch(Api.base() + '?' + q + '&t=' + Date.now(), { cache: 'no-store' }).then(function (r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    });
+  },
+  // text/plain keeps this a "simple" request: no CORS preflight to Apps Script
+  post: function (body) {
+    return fetch(Api.base(), { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(body) })
+      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); },
+            function (e) { var x = new Error('Network error'); x.network = true; throw x; });
+  }
+};
+
+function store(key, val) {
+  try { if (val === undefined) return JSON.parse(localStorage.getItem(key) || 'null'); localStorage.setItem(key, JSON.stringify(val)); }
+  catch (e) { return null; }
+}
+
+// League config: stage rules + branding. Cached so pages still open offline.
+function loadConfig() {
+  return Api.get({ view: 'config' }).then(function (cfg) {
+    if (!cfg || !cfg.stages) throw new Error('bad config');
+    store('league_cfg', cfg); applyBranding(cfg); return cfg;
+  }).catch(function (e) {
+    var c = store('league_cfg'); if (c) { applyBranding(c); return c; } throw e;
+  });
+}
+
+function hexToRgba(hex, a) {
+  var m = /^#?([0-9a-f]{6})$/i.exec(String(hex || '').trim()); if (!m) return null;
+  var n = parseInt(m[1], 16); return 'rgba(' + (n >> 16 & 255) + ',' + (n >> 8 & 255) + ',' + (n & 255) + ',' + a + ')';
+}
+
+function applyBranding(cfg) {
+  var b = (cfg && cfg.branding) || {}, root = document.documentElement.style;
+  if (b.LEAGUE_NAME) {
+    $all('[data-brand="name"]').forEach(function (n) { n.textContent = b.LEAGUE_NAME; });
+    document.title = b.LEAGUE_NAME + ' — ' + (document.body.getAttribute('data-page') || '');
+  }
+  $all('[data-brand="sub"]').forEach(function (n) { n.textContent = b.LEAGUE_SUBTITLE || ''; });
+  $all('[data-brand="logo"]').forEach(function (n) { if (b.LOGO_URL) { n.src = b.LOGO_URL; n.alt = b.LEAGUE_NAME || ''; } });
+  $all('[data-brand="sponsor"]').forEach(function (n) { if (b.SPONSOR_LOGO_URL) n.src = b.SPONSOR_LOGO_URL; });
+  [['COLOR_PRIMARY', 'magenta'], ['COLOR_SECONDARY', 'cyan']].forEach(function (p) {
+    var hex = b[p[0]]; if (!hexToRgba(hex, 1)) return;
+    root.setProperty('--' + p[1], hex);
+    root.setProperty('--' + p[1] + '-dim', hexToRgba(hex, p[1] === 'cyan' ? 0.12 : 0.15));
+    root.setProperty('--' + p[1] + '-glow', hexToRgba(hex, 0.35));
+    if (p[1] === 'cyan') { root.setProperty('--border', hexToRgba(hex, 0.12)); root.setProperty('--border-hi', hexToRgba(hex, 0.28)); }
+  });
+}
+
+function setsOf(m) { return [[+m.S1A || 0, +m.S1B || 0], [+m.S2A || 0, +m.S2B || 0], [+m.S3A || 0, +m.S3B || 0]]; }
+
+function relTime(iso) {
+  if (!iso) return '—';
+  var s = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 1000));
+  if (s < 60) return s + 's ago';
+  if (s < 3600) return Math.floor(s / 60) + 'm ago';
+  return Math.floor(s / 3600) + 'h ago';
+}
+
+var toastTimer;
+function toast(msg, isErr) {
+  var t = $('#toast'); if (!t) return;
+  t.textContent = msg; t.className = 'toast show' + (isErr ? ' err' : '');
+  clearTimeout(toastTimer); toastTimer = setTimeout(function () { t.className = 'toast'; }, isErr ? 6000 : 2500);
+}
+
+function byQueue(a, b) { return (+a['Queue Order'] || 0) - (+b['Queue Order'] || 0) || String(a['Match ID']).localeCompare(String(b['Match ID']), undefined, { numeric: true }); }
+
+// Score text for a match: completed sets plus the current set.
+function scoreLine(m, rule) {
+  var sets = setsOf(m), n = rule ? Rules.maxSets(rule) : 3, parts = [];
+  for (var i = 0; i < n; i++) if (sets[i][0] || sets[i][1] || i === 0) parts.push(sets[i][0] + '–' + sets[i][1]);
+  return parts.join(', ');
+}
+/* ==== END COMMON CLIENT HELPERS ==== */
+
+
+var S = {
+  cfg: null, auth: store('ump_auth'), matches: [], lastFetch: null,
+  cur: store('ump_cur'),            // match being scored: {id, stage, teamA, teamB, court, sets, version, status, history, viewSet}
+  queue: store('ump_queue') || [],  // unsent score ops [{matchId,set,a,b}]
+  versions: store('ump_versions') || {},
+  inflight: false, paused: false, backoff: 0, flushTimer: null, debounce: null, pollTimer: null, wake: null, view: null
+};
+
+/* ---------- views ---------- */
+function show(view) {
+  ['login', 'court', 'confirm', 'score'].forEach(function (v) { $('#v-' + v).classList.toggle('hidden', v !== view); });
+  S.view = view;
+  $('#btn-logout').classList.toggle('hidden', view === 'login');
+  $('#sync').classList.toggle('hidden', view === 'login');
+  if (view === 'score') wakeOn(); else wakeOff();
+  window.scrollTo(0, 0);
+}
+
+function modal(title, html, actions) {
+  $('#md-title').textContent = title; $('#md-body').innerHTML = html;
+  var box = $('#md-actions'); box.innerHTML = '';
+  actions.forEach(function (a) {
+    var b = document.createElement('button'); b.className = 'btn ' + (a.cls || ''); b.textContent = a.label;
+    b.onclick = function () { closeModal(); if (a.fn) a.fn(); }; box.appendChild(b);
+  });
+  $('#modal').classList.add('show');
+}
+function closeModal() { $('#modal').classList.remove('show'); }
+
+/* ---------- login ---------- */
+function renderLogin() {
+  var n = (S.cfg && S.cfg.settings.COURTS) || 4, sel = $('#in-court'), html = '';
+  for (var i = 1; i <= n; i++) html += '<option value="' + i + '">Court ' + i + '</option>';
+  sel.innerHTML = html;
+  var last = store('ump_last') || {};
+  if (last.name) $('#in-name').value = last.name;
+  if (last.court) sel.value = last.court;
+  show('login');
+}
+
+$('#btn-login').onclick = function () {
+  var name = $('#in-name').value.trim(), court = $('#in-court').value, pin = $('#in-pin').value.trim();
+  var errBox = $('#login-err'); errBox.textContent = '';
+  if (!name) { errBox.textContent = 'Enter your name'; return; }
+  if (!pin) { errBox.textContent = 'Enter the court PIN'; return; }
+  var btn = this; btn.disabled = true; btn.textContent = 'Checking…';
+  Api.post({ action: 'login', role: 'umpire', court: court, pin: pin, umpire: name }).then(function (r) {
+    if (!r.ok) { errBox.textContent = r.message || r.error; return; }
+    S.auth = { token: r.token, court: String(r.court), umpire: r.umpire, expires: r.expires };
+    store('ump_auth', S.auth); store('ump_last', { name: name, court: court });
+    $('#in-pin').value = '';
+    afterLogin();
+  }).catch(function () { errBox.textContent = 'No connection. Check Wi-Fi and try again.'; })
+    .then(function () { btn.disabled = false; btn.textContent = 'Log in'; });
+};
+
+$('#btn-logout').onclick = function () {
+  var pending = S.queue.length;
+  modal('Log out?', pending ? '<b style="color:#ff8a95">' + pending + ' score update(s) are not saved yet.</b> They will be lost if you log out now.' : 'You can log back in with the court PIN.', [
+    { label: 'Cancel', cls: 'ghost' },
+    { label: 'Log out', cls: 'red', fn: function () {
+      S.auth = null; store('ump_auth', null); S.queue = []; persistQueue(); S.cur = null; store('ump_cur', null); renderLogin();
+    } }
+  ]);
+};
+
+function afterLogin() {
+  if (S.cur && S.cur.court && String(S.cur.court) === S.auth.court && S.cur.status !== 'Done') openScoring(); else showCourt();
+  poll(); clearInterval(S.pollTimer); S.pollTimer = setInterval(poll, (S.cfg && S.cfg.settings.POLL_MS) || 5000);
+  if (S.queue.length) flushSoon(0);
+}
+
+/* ---------- court view ---------- */
+function myMatches() { return S.matches.filter(function (m) { return String(m.Court) === S.auth.court; }).sort(byQueue); }
+
+function showCourt() { renderCourt(); show('court'); }
+
+function renderCourt() {
+  $('#court-title').textContent = 'Court ' + S.auth.court + ' · ' + S.auth.umpire;
+  $('#court-upd').textContent = S.lastFetch ? 'updated ' + new Date(S.lastFetch).toLocaleTimeString() : 'loading…';
+  var mine = myMatches();
+  var groups = { now: mine.filter(function (m) { return m.Status === 'Live'; }),
+                 next: mine.filter(function (m) { return m.Status === 'Scheduled'; }),
+                 done: mine.filter(function (m) { return m.Status === 'Done'; }).reverse() };
+  Object.keys(groups).forEach(function (k) {
+    var box = $('#list-' + k);
+    if (!groups[k].length) { box.innerHTML = '<div class="empty">' + (k === 'now' ? 'No live match' : k === 'next' ? 'Nothing queued' : 'None yet') + '</div>'; return; }
+    box.innerHTML = groups[k].map(function (m) {
+      var rule = S.cfg.stages[m.Stage];
+      var cls = m.Status === 'Live' ? 'live' : m.Status === 'Done' ? 'done' : '';
+      var badge = m.Status === 'Live' ? '<span class="pill live"><span class="dot"></span>Live</span>' :
+                  m.Status === 'Done' ? '<span class="pill done">Done</span>' : '<span class="pill">#' + esc(m['Queue Order']) + '</span>';
+      return '<button class="card mcard ' + cls + '" data-id="' + esc(m['Match ID']) + '">' +
+        '<div class="top"><span>' + esc(m.Stage) + (m.Group ? ' · ' + esc(m.Group) : '') + ' · ' + esc(m['Match ID']) + '</span>' + badge + '</div>' +
+        '<div class="teams">' + esc(m['Team A']) + '<span class="vs">VS</span>' + esc(m['Team B']) + '</div>' +
+        (m.Status !== 'Scheduled' ? '<div class="sc">' + esc(scoreLine(m, rule)) + (m.Winner ? ' · 🏆 ' + esc(m.Winner) : '') + '</div>' : '') +
+        '</button>';
+    }).join('');
+  });
+  $all('#v-court .mcard').forEach(function (b) { b.onclick = function () { pick(b.getAttribute('data-id')); }; });
+}
+
+function pick(id) {
+  var m = S.matches.filter(function (x) { return x['Match ID'] === id; })[0];
+  if (!m) return;
+  if (m.Status === 'Scheduled') return showConfirm(m);
+  loadCur(m, true); openScoring();
+}
+
+/* ---------- confirm & start ---------- */
+var confirmId = null;
+function showConfirm(m) {
+  confirmId = m['Match ID'];
+  $('#cf-meta').textContent = m.Stage + (m.Group ? ' · ' + m.Group : '') + ' · Court ' + m.Court;
+  $('#cf-id').textContent = m['Match ID'];
+  $('#cf-a').textContent = m['Team A']; $('#cf-b').textContent = m['Team B'];
+  $('#cf-rule').textContent = Rules.describe(S.cfg.stages[m.Stage], 1);
+  $('#cf-check').checked = false; $('#cf-start').disabled = true; $('#cf-err').textContent = '';
+  show('confirm');
+}
+$('#cf-check').onchange = function () { $('#cf-start').disabled = !this.checked; };
+$('#cf-back').onclick = showCourt;
+$('#cf-start').onclick = function () {
+  var btn = this; btn.disabled = true; btn.textContent = 'Starting…'; $('#cf-err').textContent = '';
+  Api.post({ action: 'startMatch', token: S.auth.token, matchId: confirmId }).then(function (r) {
+    if (!r.ok) { if (r.error === 'AUTH') return authExpired(); $('#cf-err').textContent = r.message || r.error; return; }
+    upsertLocal(r.match); loadCur(r.match, true); openScoring();
+  }).catch(function () { $('#cf-err').textContent = 'No connection — a match can only be started online.'; })
+    .then(function () { btn.textContent = 'Start Match'; btn.disabled = !$('#cf-check').checked; });
+};
+
+/* ---------- scoring ---------- */
+function rule() { return S.cfg.stages[S.cur.stage]; }
+
+function loadCur(m, resetHistory) {
+  var keep = S.cur && S.cur.id === m['Match ID'] && !resetHistory ? S.cur.history : [];
+  S.cur = { id: m['Match ID'], stage: m.Stage, group: m.Group, teamA: m['Team A'], teamB: m['Team B'], court: String(m.Court),
+            sets: setsOf(m), version: +m.Version, status: m.Status, history: keep || [], viewSet: 0, moved: null };
+  S.versions[S.cur.id] = S.cur.version; store('ump_versions', S.versions);
+  S.cur.viewSet = initialView();
+  saveCur();
+}
+
+function initialView() {
+  var ms = Rules.matchStatus(rule(), S.cur.sets);
+  if (!ms.valid) return 0;
+  if (ms.decided) return ms.currentSet;
+  var c = ms.currentSet;
+  if (c > 0 && !S.cur.sets[c][0] && !S.cur.sets[c][1]) return c - 1; // show "set won" + Next Set
+  return c;
+}
+
+function saveCur() { store('ump_cur', S.cur); }
+
+function openScoring() { renderScore(); show('score'); }
+
+function renderScore() {
+  var c = S.cur, r = rule(), ms = Rules.matchStatus(r, c.sets);
+  if (!ms.valid) ms = { setsA: 0, setsB: 0, decided: false, currentSet: 0, sets: [] };
+  var v = c.viewSet, s = c.sets[v], lim = Rules.setLimits(r, v + 1);
+  var st = Rules.setStatus(s[0], s[1], lim.T, lim.C);
+  var readonly = c.status === 'Done' || !!c.moved;
+  $('#sc-meta').textContent = c.stage + (c.group ? ' · ' + c.group : '') + ' · Court ' + c.court + (r.setsToWin > 1 ? ' · Set ' + (v + 1) : '');
+  $('#sc-id').textContent = c.id;
+  $('#sc-rule').textContent = Rules.describe(r, v + 1);
+  $('#sc-na').textContent = c.teamA; $('#sc-nb').textContent = c.teamB;
+  $('#sc-a').textContent = s[0]; $('#sc-b').textContent = s[1];
+  $('#sc-sa').textContent = r.setsToWin > 1 ? 'Sets ' + ms.setsA : '';
+  $('#sc-sb').textContent = r.setsToWin > 1 ? 'Sets ' + ms.setsB : '';
+  // set chips
+  var chips = '';
+  for (var i = 0; i < Rules.maxSets(r); i++) {
+    var x = c.sets[i], xl = Rules.setLimits(r, i + 1), xs = Rules.setStatus(x[0], x[1], xl.T, xl.C);
+    var played = x[0] || x[1] || i <= v;
+    if (!played) continue;
+    var cls = xs.complete ? (xs.winner === 'A' ? 'wa' : 'wb') : (i === v ? 'cur' : '');
+    chips += '<span class="setchip ' + cls + '">S' + (i + 1) + ' ' + x[0] + '–' + x[1] + '</span>';
+  }
+  $('#sc-sets').innerHTML = chips;
+  $('#sc-golden').classList.toggle('show', !readonly && st.golden);
+  // set won / match won banner
+  var won = st.complete, box = $('#sc-setwon');
+  box.classList.toggle('show', won);
+  $('#btn-nextset').classList.add('hidden'); $('#btn-end2').classList.add('hidden');
+  if (won) {
+    var who = st.winner === 'A' ? c.teamA : c.teamB;
+    $('#sc-setwon-text').textContent = ms.decided ? 'Match won by ' + (ms.winner === 'A' ? c.teamA : c.teamB) : 'Set ' + (v + 1) + ' won by ' + who;
+    if (!readonly) {
+      if (ms.decided) $('#btn-end2').classList.remove('hidden');
+      else $('#btn-nextset').classList.remove('hidden');
+    }
+  }
+  var lockedSet = readonly || won || ms.decided;
+  $('#plus-a').disabled = lockedSet || s[0] >= lim.C || !Rules.setStatus(s[0] + 1, s[1], lim.T, lim.C).valid;
+  $('#plus-b').disabled = lockedSet || s[1] >= lim.C || !Rules.setStatus(s[0], s[1] + 1, lim.T, lim.C).valid;
+  $('#minus-a').disabled = lockedSet || s[0] <= 0;
+  $('#minus-b').disabled = lockedSet || s[1] <= 0;
+  $('#btn-undo').disabled = readonly || !c.history.length;
+  $('#btn-end').disabled = readonly || !ms.decided;
+  $('#btn-end').classList.toggle('hidden', readonly || (won && ms.decided)); // the banner already has End Match
+  $('#sc-ro').classList.toggle('hidden', c.status !== 'Done');
+  var mv = $('#sc-moved');
+  mv.classList.toggle('hidden', !c.moved); if (c.moved) mv.textContent = c.moved;
+  $all('.panel').forEach(function (p) { p.style.opacity = readonly ? 0.6 : 1; });
+}
+
+function change(side, delta) {
+  var c = S.cur; if (!c || c.status === 'Done' || c.moved) return;
+  var r = rule(), ms = Rules.matchStatus(r, c.sets);
+  if (!ms.valid || ms.decided) return;
+  var v = c.viewSet;
+  if (v !== ms.currentSet) return;                 // a finished set is locked
+  var s = c.sets[v].slice(), lim = Rules.setLimits(r, v + 1);
+  s[side] += delta;
+  if (s[side] < 0) return;
+  if (!Rules.setStatus(s[0], s[1], lim.T, lim.C).valid) { buzz(); return; } // over cap / after set end
+  c.history.push({ set: v, prev: c.sets[v].slice() });
+  if (c.history.length > 300) c.history.shift();
+  c.sets[v] = s;
+  if (navigator.vibrate) navigator.vibrate(delta > 0 ? 15 : [10, 40, 10]);
+  saveCur(); enqueue(c.id, v, s); renderScore();
+}
+function buzz() { if (navigator.vibrate) navigator.vibrate([60, 40, 60]); }
+
+$('#plus-a').onclick = function () { change(0, 1); };
+$('#plus-b').onclick = function () { change(1, 1); };
+$('#minus-a').onclick = function () { change(0, -1); };
+$('#minus-b').onclick = function () { change(1, -1); };
+
+$('#btn-undo').onclick = function () {
+  var c = S.cur, h = c.history.pop(); if (!h) return;
+  for (var i = h.set + 1; i < 3; i++) if (c.sets[i][0] || c.sets[i][1]) { c.history.push(h); return toast('Undo the later set first', true); }
+  c.sets[h.set] = h.prev; c.viewSet = h.set;
+  saveCur(); enqueue(c.id, h.set, h.prev); renderScore();
+};
+
+$('#btn-nextset').onclick = function () {
+  var ms = Rules.matchStatus(rule(), S.cur.sets);
+  if (ms.valid && !ms.decided) { S.cur.viewSet = ms.currentSet; saveCur(); renderScore(); }
+};
+
+$('#btn-back').onclick = function () { showCourt(); };
+$('#btn-end').onclick = $('#btn-end2').onclick = askEnd;
+
+function askEnd() {
+  var c = S.cur, ms = Rules.matchStatus(rule(), c.sets);
+  if (!ms.decided) return;
+  if (pendingFor(c.id)) {
+    return modal('Not saved yet', 'Some points have not reached the server. Wait for the green <b>Saved</b> bar, then end the match.', [{ label: 'OK', cls: 'primary' }]);
+  }
+  var winner = ms.winner === 'A' ? c.teamA : c.teamB, lines = [];
+  for (var i = 0; i < Rules.maxSets(rule()); i++) if (c.sets[i][0] || c.sets[i][1]) lines.push('Set ' + (i + 1) + ': ' + c.sets[i][0] + '–' + c.sets[i][1]);
+  modal('End match?',
+    '<div style="font-size:17px"><b style="color:var(--magenta)">' + esc(c.teamA) + '</b> vs <b style="color:var(--cyan)">' + esc(c.teamB) + '</b></div>' +
+    '<div style="margin:10px 0;font-family:Barlow Condensed;font-size:24px">' + esc(lines.join(' · ')) + '</div>' +
+    '<div>Winner: <b>🏆 ' + esc(winner) + '</b></div><div class="muted" style="margin-top:8px">After this the score is locked.</div>',
+    [{ label: 'Back', cls: 'ghost' }, { label: 'Confirm — End Match', cls: 'red', fn: doEnd }]);
+}
+
+function doEnd() {
+  var c = S.cur;
+  Api.post({ action: 'endMatch', token: S.auth.token, matchId: c.id, version: c.version }).then(function (r) {
+    if (r.ok) {
+      upsertLocal(r.match); toast('Match saved: ' + r.match.Winner + ' won');
+      S.cur = null; store('ump_cur', null); showCourt(); return;
+    }
+    if (r.error === 'AUTH') return authExpired();
+    if (r.current) { upsertLocal(r.current); adopt(r.current); }
+    modal('Could not end match', esc(r.message || r.error) + (r.error === 'STALE' ? '<br>The score was changed by the referee. Check it and end again.' : ''), [{ label: 'OK', cls: 'primary' }]);
+  }).catch(function () { toast('No connection — match NOT ended. Try again.', true); });
+}
+
+/* ---------- sync queue ---------- */
+function persistQueue() { store('ump_queue', S.queue); }
+function pendingFor(id) { return S.queue.some(function (o) { return o.matchId === id; }) || (S.inflight && S.inflightId === id); }
+
+function enqueue(matchId, setIdx, s) {
+  var last = S.queue[S.queue.length - 1];
+  if (last && last.matchId === matchId && last.set === setIdx + 1 && !(S.inflight && S.queue.length === 1)) { last.a = s[0]; last.b = s[1]; }
+  else S.queue.push({ matchId: matchId, set: setIdx + 1, a: s[0], b: s[1] });
+  persistQueue(); setSync();
+  clearTimeout(S.debounce); S.debounce = setTimeout(flush, 600);
+}
+
+function flushSoon(ms) { clearTimeout(S.flushTimer); S.flushTimer = setTimeout(flush, ms); }
+
+function setSync(err) {
+  var el = $('#sync'), n = S.queue.length + (S.inflight ? 0 : 0);
+  if (err) { el.className = 'sync error'; el.textContent = '⚠ NOT SAVED — retrying (' + S.queue.length + ' pending)' + (typeof err === 'string' ? ' · ' + err : ''); }
+  else if (S.queue.length || S.inflight) { el.className = 'sync saving'; el.textContent = '● Saving…'; }
+  else { el.className = 'sync saved'; el.textContent = '✓ Saved'; }
+  if (S.view === 'login') el.classList.add('hidden');
+}
+
+function flush() {
+  if (S.inflight || S.paused || !S.queue.length || !S.auth) return;
+  var op = S.queue[0], ver = S.versions[op.matchId];
+  S.inflight = true; S.inflightId = op.matchId; setSync();
+  Api.post({ action: 'setScore', token: S.auth.token, matchId: op.matchId, set: op.set, a: op.a, b: op.b, version: ver }).then(function (r) {
+    S.inflight = false;
+    if (r.ok) {
+      // only drop the op if it wasn't edited while in flight
+      if (S.queue[0] === op) S.queue.shift();
+      setVersion(op.matchId, +r.match.Version); upsertLocal(r.match);
+      if (S.cur && S.cur.id === op.matchId && r.match.Status === 'Done') { S.cur.status = 'Done'; saveCur(); }
+      S.backoff = 0; persistQueue(); setSync();
+      if (S.queue.length) flush();
+      return;
+    }
+    if (r.error === 'STALE') return onStale(op, r.current);
+    if (r.error === 'AUTH') { setSync('session expired'); return authExpired(); }
+    if (r.error === 'BUSY' || r.error === 'SERVER') return retry();
+    // rejected for a real reason (finished, moved, invalid): drop this match's ops and take the server's score
+    S.queue = S.queue.filter(function (o) { return o.matchId !== op.matchId; }); persistQueue();
+    if (r.current) { upsertLocal(r.current); adopt(r.current); }
+    if (r.error === 'WRONG_COURT' && S.cur && S.cur.id === op.matchId) { S.cur.moved = r.message; saveCur(); }
+    setSync(); if (S.view === 'score') renderScore();
+    modal('Score not accepted', esc(r.message || r.error), [{ label: 'OK', cls: 'primary' }]);
+    if (S.queue.length) flush();
+  }).catch(function () { S.inflight = false; retry(); });
+}
+
+function retry() {
+  S.backoff = Math.min(15000, S.backoff ? S.backoff * 2 : 1000);
+  setSync(true); flushSoon(S.backoff);
+}
+
+function setVersion(id, v) {
+  S.versions[id] = v; store('ump_versions', S.versions);
+  if (S.cur && S.cur.id === id) { S.cur.version = v; saveCur(); }
+}
+
+function onStale(op, server) {
+  S.paused = true; setSync();
+  var local = S.cur && S.cur.id === op.matchId ? S.cur.sets : null;
+  var sv = setsOf(server), fmt = function (sets) { return sets.filter(function (s, i) { return i === 0 || s[0] || s[1]; }).map(function (s) { return s[0] + '–' + s[1]; }).join(', '); };
+  modal('Score changed on the server',
+    'The score for <b>' + esc(server['Team A']) + ' vs ' + esc(server['Team B']) + '</b> was changed elsewhere (probably by the referee).<br><br>' +
+    'Server: <b>' + esc(fmt(sv)) + '</b><br>This phone: <b>' + esc(local ? fmt(local) : op.a + '–' + op.b + ' (set ' + op.set + ')') + '</b><br><br>Which score is correct?',
+    [{ label: 'Use server score', cls: 'blue', fn: function () { useServer(server); } },
+     { label: 'Keep my score', cls: 'red', fn: function () { keepMine(server); } }]);
+}
+
+function useServer(server) {
+  var id = server['Match ID'];
+  S.queue = S.queue.filter(function (o) { return o.matchId !== id; }); persistQueue();
+  setVersion(id, +server.Version); upsertLocal(server);
+  if (S.cur && S.cur.id === id) { loadCur(server, true); }
+  S.paused = false; setSync(); if (S.view === 'score') renderScore(); flush();
+}
+
+function keepMine(server) {
+  var id = server['Match ID'], sv = setsOf(server), local = S.cur && S.cur.id === id ? S.cur.sets : null;
+  S.queue = S.queue.filter(function (o) { return o.matchId !== id; });
+  setVersion(id, +server.Version);
+  if (local) {
+    var k = -1; for (var i = 0; i < 3; i++) if (local[i][0] !== sv[i][0] || local[i][1] !== sv[i][1]) { k = i; break; }
+    if (k >= 0) {
+      var ops = [], x = sv.map(function (s) { return s.slice(); });
+      for (i = 2; i > k; i--) if (x[i][0] || x[i][1]) { ops.push({ matchId: id, set: i + 1, a: 0, b: 0 }); x[i] = [0, 0]; }
+      for (i = k; i < 3; i++) if (local[i][0] !== x[i][0] || local[i][1] !== x[i][1]) ops.push({ matchId: id, set: i + 1, a: local[i][0], b: local[i][1] });
+      S.queue = ops.concat(S.queue);
+    }
+  }
+  persistQueue(); S.paused = false; setSync(); flush();
+}
+
+// Take the server's copy of the current match (referee override, rejected op).
+function adopt(m) {
+  if (!S.cur || S.cur.id !== m['Match ID']) return;
+  var moved = String(m.Court) !== S.auth.court;
+  loadCur(m, true);
+  if (moved) S.cur.moved = 'The referee moved this match to Court ' + m.Court + '.';
+  saveCur();
+}
+
+function upsertLocal(m) {
+  var i = S.matches.findIndex(function (x) { return x['Match ID'] === m['Match ID']; });
+  if (i >= 0) S.matches[i] = m; else S.matches.push(m);
+}
+
+function authExpired() {
+  modal('Please log in again', 'Your session expired. Unsaved points are kept on this phone and will be sent after you log in.', [
+    { label: 'Log in', cls: 'primary', fn: function () { S.auth = null; store('ump_auth', null); renderLogin(); } }]);
+}
+
+/* ---------- polling ---------- */
+function poll() {
+  if (!S.auth) return;
+  Api.get({ view: 'matches' }).then(function (list) {
+    if (!Array.isArray(list)) return;
+    S.matches = list; S.lastFetch = Date.now();
+    if (S.view === 'court') renderCourt();
+    if (S.cur) reconcile();
+  }).catch(function () { if (S.view === 'court') $('#court-upd').textContent = 'offline — showing last data'; });
+}
+
+function reconcile() {
+  var m = S.matches.filter(function (x) { return x['Match ID'] === S.cur.id; })[0];
+  if (!m) { if (S.view === 'score') { S.cur.moved = 'This match was deleted by the referee.'; renderScore(); } return; }
+  if (String(m.Court) !== S.auth.court) {
+    if (!S.cur.moved) { S.cur.moved = 'The referee moved this match to Court ' + m.Court + '.'; saveCur(); if (S.view === 'score') renderScore(); }
+    return;
+  }
+  if (S.cur.moved) { S.cur.moved = null; saveCur(); }
+  var quiet = !pendingFor(S.cur.id) && !S.paused;
+  if (quiet && +m.Version > S.cur.version) {
+    var changedScore = JSON.stringify(setsOf(m)) !== JSON.stringify(S.cur.sets);
+    adopt(m);
+    if (changedScore && S.view === 'score') toast('Score updated by the referee');
+  } else if (quiet && +m.Version >= S.cur.version && m.Status !== S.cur.status) { S.cur.status = m.Status; saveCur(); }
+  if (S.view === 'score') renderScore();
+}
+
+/* ---------- keep screen awake ---------- */
+function wakeOn() {
+  if (!('wakeLock' in navigator) || S.wake) return;
+  navigator.wakeLock.request('screen').then(function (w) { S.wake = w; w.addEventListener('release', function () { S.wake = null; }); }).catch(function () {});
+}
+function wakeOff() { if (S.wake) { S.wake.release(); S.wake = null; } }
+document.addEventListener('visibilitychange', function () {
+  if (document.visibilityState === 'visible') { if (S.view === 'score') wakeOn(); poll(); flushSoon(0); }
+});
+window.addEventListener('online', function () { S.backoff = 0; flushSoon(0); poll(); });
+window.addEventListener('offline', function () { if (S.queue.length) setSync(true); });
+window.addEventListener('beforeunload', function (e) { if (S.queue.length) { e.preventDefault(); e.returnValue = ''; } });
+
+/* ---------- start ---------- */
+loadConfig().then(function (cfg) {
+  S.cfg = cfg;
+  if (S.auth && S.auth.expires && S.auth.expires < Date.now()) { S.auth = null; store('ump_auth', null); }
+  if (S.auth) afterLogin(); else renderLogin();
+}).catch(function () {
+  document.querySelector('main').innerHTML = '<div class="card" style="margin-top:20px">Cannot reach the league server. Check the internet connection and that APPS_SCRIPT_URL is set, then reload.</div>';
+});
+</script>
+</body>
+</html>
