@@ -509,7 +509,11 @@ function pick(id) {
   var m = S.matches.filter(function (x) { return x['Match ID'] === id; })[0];
   if (!m) return;
   if (m.Status === 'Scheduled') return showConfirm(m);
-  loadCur(m, true); openScoring();
+  // Reopening the match this phone is scoring: keep the phone's own score and Undo history.
+  // Only take the server copy if it is newer (e.g. referee override) and nothing is waiting to be sent.
+  var same = S.cur && S.cur.id === id;
+  if (same && (pendingFor(id) || +m.Version <= S.cur.version)) { S.cur.viewSet = initialView(); saveCur(); return openScoring(); }
+  loadCur(m, !same); openScoring();
 }
 
 /* ---------- confirm & start ---------- */
@@ -595,11 +599,14 @@ function renderScore() {
       else $('#btn-nextset').classList.remove('hidden');
     }
   }
-  var lockedSet = readonly || won || ms.decided;
-  $('#plus-a').disabled = lockedSet || s[0] >= lim.C || !Rules.setStatus(s[0] + 1, s[1], lim.T, lim.C).valid;
-  $('#plus-b').disabled = lockedSet || s[1] >= lim.C || !Rules.setStatus(s[0], s[1] + 1, lim.T, lim.C).valid;
-  $('#minus-a').disabled = lockedSet || s[0] <= 0;
-  $('#minus-b').disabled = lockedSet || s[1] <= 0;
+  // + only while the set is in play. − stays available on the latest set until End Match is confirmed,
+  // so a wrongly awarded winning point can always be taken back.
+  var noPlus = readonly || won || ms.decided || v !== ms.currentSet;
+  var noMinus = readonly || laterSetPlayed(v);
+  $('#plus-a').disabled = noPlus || s[0] >= lim.C || !Rules.setStatus(s[0] + 1, s[1], lim.T, lim.C).valid;
+  $('#plus-b').disabled = noPlus || s[1] >= lim.C || !Rules.setStatus(s[0], s[1] + 1, lim.T, lim.C).valid;
+  $('#minus-a').disabled = noMinus || s[0] <= 0 || !Rules.setStatus(s[0] - 1, s[1], lim.T, lim.C).valid;
+  $('#minus-b').disabled = noMinus || s[1] <= 0 || !Rules.setStatus(s[0], s[1] - 1, lim.T, lim.C).valid;
   $('#btn-undo').disabled = readonly || !c.history.length;
   $('#btn-end').disabled = readonly || !ms.decided;
   $('#btn-end').classList.toggle('hidden', readonly || (won && ms.decided)); // the banner already has End Match
@@ -612,9 +619,10 @@ function renderScore() {
 function change(side, delta) {
   var c = S.cur; if (!c || c.status === 'Done' || c.moved) return;
   var r = rule(), ms = Rules.matchStatus(r, c.sets);
-  if (!ms.valid || ms.decided) return;
+  if (!ms.valid) return;
   var v = c.viewSet;
-  if (v !== ms.currentSet) return;                 // a finished set is locked
+  if (delta > 0 && (ms.decided || v !== ms.currentSet)) return; // no points after a set/match is won
+  if (delta < 0 && laterSetPlayed(v)) return;                     // correct the latest set first
   var s = c.sets[v].slice(), lim = Rules.setLimits(r, v + 1);
   s[side] += delta;
   if (s[side] < 0) return;
@@ -624,6 +632,10 @@ function change(side, delta) {
   c.sets[v] = s;
   if (navigator.vibrate) navigator.vibrate(delta > 0 ? 15 : [10, 40, 10]);
   saveCur(); enqueue(c.id, v, s); renderScore();
+}
+function laterSetPlayed(v) {
+  for (var i = v + 1; i < 3; i++) if (S.cur.sets[i][0] || S.cur.sets[i][1]) return true;
+  return false;
 }
 function buzz() { if (navigator.vibrate) navigator.vibrate([60, 40, 60]); }
 
