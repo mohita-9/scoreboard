@@ -124,7 +124,7 @@ table.st td.pts { font-family: "Barlow Condensed", sans-serif; font-size: 22px; 
 
 <script>
 // ===== CONFIGURE: your Apps Script web app URL (ends in /exec) =====
-const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxQUhIfJMX-Zql_Sx_AC-PK5hPSVbPDVWCyTDPs5cv6XHdXTAkZYOxtATEawlUxEu_h0A/exec";
+const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz5a-poKEylTizeSQ_iU3pCGCVm40AKrNvfzMHL868sM9Qak4bp7bA8nyYA4fMfPS6p/exec";
 // ==================================================================
 
 /* ==== SHARED SCORING RULES (identical copy on server and every page) ==== */
@@ -295,6 +295,12 @@ function scoreLine(m, rule) {
   for (var i = 0; i < n; i++) if (sets[i][0] || sets[i][1] || i === 0) parts.push(sets[i][0] + '–' + sets[i][1]);
   return parts.join(', ');
 }
+// Repeat fn every ms, but skip while the page is in the background (saves server load), and run at once on return.
+function every(ms, fn) {
+  var t = setInterval(function () { if (!document.hidden) fn(); }, ms);
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) fn(); });
+  return t;
+}
 /* ==== END COMMON CLIENT HELPERS ==== */
 
 
@@ -402,7 +408,7 @@ loadConfig().then(function (cfg) {
   return refresh();
 }).then(function () {
   if (P.team) choose(P.team);
-  setInterval(refresh, (P.cfg.settings.POLL_MS) || 5000);
+  every(P.cfg.settings.PLAYER_POLL_MS || 10000, refresh);
 }).catch(function () {
   $('#content').innerHTML = '<div class="card" style="margin-top:16px">Cannot reach the league server right now. Please try again in a moment.</div>';
 });
