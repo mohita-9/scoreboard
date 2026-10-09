@@ -303,7 +303,8 @@ var P = { cfg: null, matches: [], standings: [], team: null };
 function teamNames() {
   var set = {};
   P.standings.forEach(function (r) { if (r['Team Name']) set[r['Team Name']] = 1; });
-  P.matches.forEach(function (m) { if (m['Team A']) set[m['Team A']] = 1; if (m['Team B']) set[m['Team B']] = 1; });
+  // knockout placeholders like "G1 1st" or "PQ1 Winner" are not teams, so only fall back to match names if there is no group table
+  if (!P.standings.length) P.matches.forEach(function (m) { if (m['Team A']) set[m['Team A']] = 1; if (m['Team B']) set[m['Team B']] = 1; });
   return Object.keys(set).sort(function (a, b) { return a.localeCompare(b); });
 }
 
