@@ -275,22 +275,19 @@ h1 {
 }
 
 /* ── badminton graphic (left of header) ── */
-.badminton-art { height: clamp(70px, 9vw, 130px) !important; width: auto; aspect-ratio: 200 / 130; overflow: visible;
+.badminton-art { width: auto; aspect-ratio: 200 / 130; overflow: visible;
   filter: drop-shadow(0 0 14px rgba(221,14,35,0.25)) drop-shadow(0 0 22px rgba(11,73,211,0.2)); }
 .badminton-art .bd-shuttle { animation: bdFloat 3.2s ease-in-out infinite; transform-box: fill-box; }
 @keyframes bdFloat { 0%,100% { transform: translate(0,0); } 50% { transform: translate(4px,-5px); } }
-@media (max-width: 600px) { .badminton-art { height: clamp(46px, 13vw, 64px) !important; } }
 
-.page-header .logo-left.badminton-art { height: clamp(80px, 10vw, 140px) !important; }
-@media (max-width: 600px) { .page-header .logo-left.badminton-art { height: clamp(52px, 15vw, 72px) !important; } }
+@media (max-width: 600px) {  }
 
 /* ── bigger, tilted badminton art + flying shuttle ── */
 .page-header .logo-left.badminton-art {
-  height: clamp(110px, 13vw, 190px) !important;
   transform: rotate(-10deg);
   transform-origin: 50% 60%;
 }
-@media (max-width: 600px) { .page-header .logo-left.badminton-art { height: clamp(64px, 19vw, 92px) !important; } }
+@media (max-width: 600px) {  }
 .badminton-art .bd-shuttle { transition: opacity 0.5s ease; }
 .badminton-art.flying .bd-shuttle-body { opacity: 0; }
 .bd-shuttle-body { transition: opacity 0.4s ease; }
@@ -305,12 +302,16 @@ h1 {
   box-shadow: 0 0 24px rgba(221,14,35,0.7), 0 0 40px rgba(11,73,211,0.5);
 }
 
-.page-header .logo-left.badminton-art { height: clamp(130px, 15.5vw, 230px) !important; }
-@media (max-width: 600px) { .page-header .logo-left.badminton-art { height: clamp(74px, 22vw, 104px) !important; } }
+@media (max-width: 600px) {  }
 
 .page-header { grid-template-columns: minmax(0,1fr) auto minmax(0,1fr) !important; }
 .page-header .logo-left.badminton-art { max-width: 100%; }
 @media (max-width: 600px) { .page-header { grid-template-columns: minmax(0,1fr) auto minmax(0,1fr) !important; } }
+
+/* ===== RACQUET DRAWING SIZE — edit these two lines =====
+   clamp(smallest, scales-with-screen, largest)                */
+.page-header .logo-left.badminton-art { height: clamp(100px, 12vw, 180px) !important; }   /* desktop / TV */
+@media (max-width: 600px) { .page-header .logo-left.badminton-art { height: clamp(60px, 17vw, 84px) !important; } }   /* phone */
 </style>
 </head>
 <body>
