@@ -312,25 +312,7 @@ h1 {
    clamp(smallest, scales-with-screen, largest)                */
 .page-header .logo-left.badminton-art { height: clamp(100px, 12vw, 180px) !important; }   /* desktop / TV */
 @media (max-width: 600px) { .page-header .logo-left.badminton-art { height: clamp(60px, 17vw, 84px) !important; } }   /* phone */
-
-/* league-layout v2 */
-/* a little breathing room at the screen edges on laptops / TVs (phones keep their own padding) */
-html { background-color: #07060c; }
-body { min-height: 100vh; }
-@media (max-width: 600px) { .lc-card { width: 100%; } }
-@media (min-width: 601px) { body { padding-left: clamp(10px, 2vw, 40px); padding-right: clamp(10px, 2vw, 40px); padding-bottom: 24px; } }
-/* names that are long step down a size; .long / .xlong are set by the small script at the bottom */
-.lc-team { white-space: normal !important; overflow: visible !important; text-overflow: clip !important; overflow-wrap: anywhere; line-height: 1.2; }
-
-.team-row { gap: 10px; align-items: center; }
-.team-name { min-width: 0; overflow-wrap: anywhere; line-height: 1.25; }
-.team-name.long  { font-size: clamp(13px, 1.2vw, 18px) !important; }
-.team-name.xlong { font-size: clamp(12px, 1.05vw, 16px) !important; }
-.winner-badge { white-space: nowrap; display: inline-block; }
-.team-score { flex: 0 0 auto; }
-.champion-name { overflow-wrap: anywhere; max-width: 100%; }
 </style>
-<script src="league-config.js"></script>
 </head>
 <body>
 
@@ -397,8 +379,7 @@ body { min-height: 100vh; }
 </div>
 
 <script>
-  // league-config v3: the link comes from league-config.js (shared by all pages); the one here is a fallback
-  const APPS_SCRIPT_URL = (window.LEAGUE_URL ? String(window.LEAGUE_URL).split("?")[0] : "https://script.google.com/macros/s/AKfycbz_54_l9Ra3EVcKLt3sA4iCeVqHR9767yhS_60L7El_9qk46nPYAg-j3M_of7NTfKAH/exec") + "?sheet=Knockout";
+  const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxpFMGoyn6GmQFqfc5n-0-xJDhC0WuBfmUrGNqaw3VTBxJm5tFFGPk9kzi0z6q_FdhJOA/exec?sheet=Knockout";
   const POLL_MS = 8000;
   let lastGoodData = null;
 
@@ -586,23 +567,6 @@ body { min-height: 100vh; }
   loadLeagueBranding();
   refresh();
   setInterval(refresh, POLL_MS);
-</script>
-
-<script>
-/* league-layout v2: mark long team names so they step down a size (they always wrap, never crop) */
-(function () {
-  function fit() {
-    var els = document.querySelectorAll(".td-team, .team-name, .lc-team");
-    for (var i = 0; i < els.length; i++) {
-      var el = els[i], t = el.firstChild && el.firstChild.nodeType === 3 ? el.firstChild.nodeValue : el.textContent;
-      var n = String(t || "").trim().length;
-      el.classList.toggle("long", n > 22 && n <= 38);
-      el.classList.toggle("xlong", n > 38);
-    }
-  }
-  fit();
-  if (window.MutationObserver) new MutationObserver(fit).observe(document.body, { childList: true, subtree: true });
-})();
 </script>
 </body>
 </html>
