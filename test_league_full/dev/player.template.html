@@ -151,14 +151,23 @@ function render() {
   $('#content').innerHTML = html;
 }
 
+// One request per refresh. Each phone waits a little longer when the server is struggling (up to 1 minute),
+// and phones are spread out in time so they don't all ask at the same second.
+var failures = 0;
 function refresh() {
-  return Promise.all([Api.get({ view: 'matches' }), Api.get({ sheet: 'Sheet1' })]).then(function (r) {
-    if (Array.isArray(r[0])) P.matches = r[0];
-    if (Array.isArray(r[1])) P.standings = r[1];
+  return Api.get({ view: 'public' }).then(function (r) {
+    if (!r || !Array.isArray(r.matches)) throw new Error('bad');
+    P.matches = r.matches; P.standings = r.standings || []; failures = 0;
     $('#updated').textContent = 'Updated ' + new Date().toLocaleTimeString();
     render();
-  }).catch(function () { $('#updated').textContent = 'Offline — retrying…'; });
+  }).catch(function () { failures++; $('#updated').textContent = 'Busy — retrying…'; });
 }
+function schedule() {
+  var base = (P.cfg.settings.PLAYER_POLL_MS) || 15000;
+  var wait = Math.min(60000, base * Math.pow(2, Math.min(failures, 2))) * (0.8 + Math.random() * 0.4);
+  setTimeout(function () { (document.hidden ? Promise.resolve() : refresh()).then(schedule); }, wait);
+}
+document.addEventListener('visibilitychange', function () { if (!document.hidden && P.cfg) refresh(); });
 
 loadConfig().then(function (cfg) {
   P.cfg = cfg;
@@ -168,7 +177,7 @@ loadConfig().then(function (cfg) {
   return refresh();
 }).then(function () {
   if (P.team) choose(P.team);
-  every(P.cfg.settings.PLAYER_POLL_MS || 10000, refresh);
+  schedule();
 }).catch(function () {
   $('#content').innerHTML = '<div class="card" style="margin-top:16px">Cannot reach the league server right now. Please try again in a moment.</div>';
 });

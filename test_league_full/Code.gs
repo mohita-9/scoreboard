@@ -109,7 +109,7 @@ var DEFAULT_SETTINGS = [
   ['LEAGUE_POINTS_PER_WIN', 2, 'Group points for a win'],
   ['LEAGUE_POINTS_PER_LOSS', 0, 'Group points for a loss'],
   ['POLL_MS', 5000, 'How often umpire/referee pages refresh (ms)'],
-  ['PLAYER_POLL_MS', 10000, 'How often player.html refreshes (ms) — keep higher when many players watch'],
+  ['PLAYER_POLL_MS', 15000, 'How often player.html refreshes (ms) — keep higher when many players watch'],
   ['COURTS', 4, 'Number of courts'],
   ['LEAGUE_NAME', 'CXO Baddy League', 'Shown as page title / header on every page'],
   ['LEAGUE_SUBTITLE', '', 'Optional line under the title'],
@@ -171,6 +171,11 @@ function doGet(e) {
   try {
     if (p.view === 'matches') return json_(cached_('view:matches', function () { return readMatches_().objs.map(publicMatch_); }));
     if (p.view === 'config') return json_(cached_('view:config', publicConfig_, 30));
+    // One combined, slightly longer-cached view for the public (player.html): a single request per refresh,
+    // and however many players are watching, the sheet is read at most once every 5 seconds.
+    if (p.view === 'public') return json_(cached_('view:public', function () {
+      return { matches: readMatches_().objs.map(publicMatch_), standings: sheetObjects_(TAB.STANDINGS), at: new Date().toISOString() };
+    }, 5));
     if (p.view === 'teams') return json_(cached_('view:teams', function () { return readTeams_(); }));
     if (p.sheet) {
       var allowed = [TAB.STANDINGS, TAB.KNOCKOUT, TAB.TEAMS, TAB.MATCHES];
@@ -302,11 +307,17 @@ function endMatch_(b, tok) {
   if (m['Status'] === STATUS.DONE) return ok_(m);
   if (m['Status'] !== STATUS.LIVE) throw err_('NOT_STARTED', 'Match is not live', m);
   if (Number(b.version) !== Number(m['Version'])) throw err_('STALE', 'Score changed elsewhere', m);
-  var st = Rules.matchStatus(stageRule_(m['Stage']), setsOf_(m));
+  // The umpire's phone sends its final score with End Match, so unsent points don't block ending.
+  var sets = setsOf_(m);
+  if (b.sets) {
+    sets = [0, 1, 2].map(function (i) { var x = b.sets[i] || [0, 0]; return [x[0], x[1]]; });
+    if (!sets.every(function (x) { return isInt_(x[0]) && isInt_(x[1]); })) throw err_('INVALID', 'Scores must be whole numbers', m);
+  }
+  var st = Rules.matchStatus(stageRule_(m['Stage']), sets);
   if (!st.valid) throw err_('INVALID', st.error, m);
   if (!st.decided) throw err_('NOT_DECIDED', 'Nobody has won enough sets yet', m);
   var old = snapshot_(m);
-  applySets_(m, setsOf_(m), st);
+  applySets_(m, sets, st);
   m['Status'] = STATUS.DONE;
   m['Winner'] = st.winner === 'A' ? m['Team A'] : m['Team B'];
   saveMatch_(db, m, 'endMatch', old, tok);
@@ -675,7 +686,7 @@ function publicConfig_() {
   var c = getConfig_();
   return { stages: c.stages, stageOrder: c.stageOrder, branding: c.branding,
            settings: { LEAGUE_POINTS_PER_WIN: num_(c.settings.LEAGUE_POINTS_PER_WIN), LEAGUE_POINTS_PER_LOSS: num_(c.settings.LEAGUE_POINTS_PER_LOSS),
-                       POLL_MS: num_(c.settings.POLL_MS) || 5000, PLAYER_POLL_MS: num_(c.settings.PLAYER_POLL_MS) || 10000, COURTS: num_(c.settings.COURTS) || 4 } };
+                       POLL_MS: num_(c.settings.POLL_MS) || 5000, PLAYER_POLL_MS: num_(c.settings.PLAYER_POLL_MS) || 15000, COURTS: num_(c.settings.COURTS) || 4 } };
 }
 
 function readTeams_() {
@@ -728,7 +739,7 @@ function cached_(key, fn, seconds) {
 
 function clearCaches_(withConfig) {
   if (withConfig) { getConfig_.memo = null; CacheService.getScriptCache().removeAll(['cfg:all', 'view:config']); }
-  CacheService.getScriptCache().removeAll(['view:matches', 'view:teams',
+  CacheService.getScriptCache().removeAll(['view:matches', 'view:teams', 'view:public',
     'sheet:' + TAB.STANDINGS, 'sheet:' + TAB.KNOCKOUT, 'sheet:' + TAB.TEAMS, 'sheet:' + TAB.MATCHES]);
 }
 

@@ -251,7 +251,12 @@ function showCourt() { renderCourt(); show('court'); }
 function renderCourt() {
   $('#court-title').textContent = 'Court ' + S.auth.court + ' · ' + S.auth.umpire;
   $('#court-upd').textContent = S.lastFetch ? 'updated ' + new Date(S.lastFetch).toLocaleTimeString() : 'loading…';
-  var mine = myMatches();
+  var mine = myMatches().map(function (m) {
+    var id = m['Match ID'];
+    if (endingFor(id) && m.Status !== 'Done') return Object.assign({}, m, { Status: 'Done', Winner: m.Winner || '…saving' });
+    if (startingFor(id) && m.Status === 'Scheduled') return Object.assign({}, m, { Status: 'Live' });
+    return m;
+  });
   var groups = { now: mine.filter(function (m) { return m.Status === 'Live'; }),
                  next: mine.filter(function (m) { return m.Status === 'Scheduled'; }),
                  done: mine.filter(function (m) { return m.Status === 'Done'; }).reverse() };
@@ -276,7 +281,9 @@ function renderCourt() {
 function pick(id) {
   var m = S.matches.filter(function (x) { return x['Match ID'] === id; })[0];
   if (!m) return;
-  if (m.Status === 'Scheduled') return showConfirm(m);
+  if (endingFor(id)) return toast('Result is being saved — it is locked now');
+  if (m.Status === 'Scheduled' && !startingFor(id)) return showConfirm(m);
+  if (m.Status === 'Scheduled') m = Object.assign({}, m, { Status: 'Live' });
   // Reopening the match this phone is scoring: keep the phone's own score and Undo history.
   // Only take the server copy if it is newer (e.g. referee override) and nothing is waiting to be sent.
   var same = S.cur && S.cur.id === id;
@@ -297,13 +304,17 @@ function showConfirm(m) {
 }
 $('#cf-check').onchange = function () { $('#cf-start').disabled = !this.checked; };
 $('#cf-back').onclick = showCourt;
+// Start is instant: the scoring screen opens straight away and "start" is sent to the server in the
+// background (ahead of any points), the same way points are. If the server refuses, the umpire is told.
 $('#cf-start').onclick = function () {
-  var btn = this; btn.disabled = true; btn.textContent = 'Starting…'; $('#cf-err').textContent = '';
-  Api.post({ action: 'startMatch', token: S.auth.token, matchId: confirmId }).then(function (r) {
-    if (!r.ok) { if (r.error === 'AUTH') return authExpired(); $('#cf-err').textContent = r.message || r.error; return; }
-    upsertLocal(r.match); loadCur(r.match, true); openScoring();
-  }).catch(function () { $('#cf-err').textContent = 'No connection — a match can only be started online.'; })
-    .then(function () { btn.textContent = 'Start Match'; btn.disabled = !$('#cf-check').checked; });
+  var m = S.matches.filter(function (x) { return x['Match ID'] === confirmId; })[0];
+  if (!m) return;
+  var live = S.matches.filter(function (x) { return x.Status === 'Live' && String(x.Court) === S.auth.court && x['Match ID'] !== confirmId; })[0];
+  if (live && !endingFor(live['Match ID'])) { $('#cf-err').textContent = 'Match ' + live['Match ID'] + ' is still live on this court. End it first.'; return; }
+  var local = Object.assign({}, m, { Status: 'Live', Umpire: S.auth.umpire });
+  upsertLocal(local); loadCur(local, true);
+  S.queue.push({ type: 'start', matchId: confirmId }); persistQueue(); setSync(); flushSoon(0);
+  openScoring();
 };
 
 /* ---------- scoring ---------- */
@@ -430,9 +441,6 @@ $('#btn-end').onclick = $('#btn-end2').onclick = askEnd;
 function askEnd() {
   var c = S.cur, ms = Rules.matchStatus(rule(), c.sets);
   if (!ms.decided) return;
-  if (pendingFor(c.id)) {
-    return modal('Not saved yet', 'Some points have not reached the server. Wait for the green <b>Saved</b> bar, then end the match.', [{ label: 'OK', cls: 'primary' }]);
-  }
   var winner = ms.winner === 'A' ? c.teamA : c.teamB, lines = [];
   for (var i = 0; i < Rules.maxSets(rule()); i++) if (c.sets[i][0] || c.sets[i][1]) lines.push('Set ' + (i + 1) + ': ' + c.sets[i][0] + '–' + c.sets[i][1]);
   modal('End match?',
@@ -442,18 +450,23 @@ function askEnd() {
     [{ label: 'Back', cls: 'ghost' }, { label: 'Confirm — End Match', cls: 'red', fn: doEnd }]);
 }
 
+// End Match is instant too: the final score is sent with the "end" request (replacing any unsent points),
+// and it keeps retrying in the background until the server has it.
 function doEnd() {
-  var c = S.cur;
-  Api.post({ action: 'endMatch', token: S.auth.token, matchId: c.id, version: c.version }).then(function (r) {
-    if (r.ok) {
-      upsertLocal(r.match); toast('Match saved: ' + r.match.Winner + ' won');
-      S.cur = null; store('ump_cur', null); showCourt(); return;
-    }
-    if (r.error === 'AUTH') return authExpired();
-    if (r.current) { upsertLocal(r.current); adopt(r.current); }
-    modal('Could not end match', esc(r.message || r.error) + (r.error === 'STALE' ? '<br>The score was changed by the referee. Check it and end again.' : ''), [{ label: 'OK', cls: 'primary' }]);
-  }).catch(function () { toast('No connection — match NOT ended. Try again.', true); });
+  var c = S.cur, ms = Rules.matchStatus(rule(), c.sets);
+  var sets = c.sets.map(function (x) { return x.slice(); });
+  S.queue = S.queue.filter(function (o) { return !(o.matchId === c.id && !o.type); });
+  S.queue.push({ type: 'end', matchId: c.id, sets: sets, snapshot: { id: c.id, stage: c.stage, group: c.group, teamA: c.teamA, teamB: c.teamB, court: c.court } });
+  persistQueue();
+  var m = S.matches.filter(function (x) { return x['Match ID'] === c.id; })[0] || {};
+  upsertLocal(Object.assign({}, m, { Status: 'Done', Winner: ms.winner === 'A' ? c.teamA : c.teamB,
+    S1A: sets[0][0], S1B: sets[0][1], S2A: sets[1][0], S2B: sets[1][1], S3A: sets[2][0], S3B: sets[2][1] }));
+  S.cur = null; store('ump_cur', null);
+  setSync(); flushSoon(0); showCourt();
+  toast((ms.winner === 'A' ? c.teamA : c.teamB) + ' won — saving result');
 }
+function endingFor(id) { return S.queue.some(function (o) { return o.matchId === id && o.type === 'end'; }); }
+function startingFor(id) { return S.queue.some(function (o) { return o.matchId === id && o.type === 'start'; }); }
 
 /* ---------- sync queue ---------- */
 function persistQueue() { store('ump_queue', S.queue); }
@@ -481,8 +494,13 @@ function flush() {
   if (S.inflight || S.paused || !S.queue.length || !S.auth) return;
   var op = S.queue[0], ver = S.versions[op.matchId];
   S.inflight = true; S.inflightId = op.matchId; setSync();
-  Api.post({ action: 'setScore', token: S.auth.token, matchId: op.matchId, set: op.set, a: op.a, b: op.b, version: ver }).then(function (r) {
+  var body = op.type === 'start' ? { action: 'startMatch', matchId: op.matchId }
+           : op.type === 'end' ? { action: 'endMatch', matchId: op.matchId, sets: op.sets, version: ver }
+           : { action: 'setScore', matchId: op.matchId, set: op.set, a: op.a, b: op.b, version: ver };
+  body.token = S.auth.token;
+  Api.post(body).then(function (r) {
     S.inflight = false;
+    if (r.ok && op.type === 'end') toast('Result saved: ' + r.match.Winner + ' won');
     if (r.ok) {
       // only drop the op if it wasn't edited while in flight
       if (S.queue[0] === op) S.queue.shift();
@@ -492,6 +510,7 @@ function flush() {
       if (S.queue.length) flush();
       return;
     }
+    if (op.type && r.error !== 'AUTH' && r.error !== 'BUSY' && r.error !== 'SERVER') return opRefused(op, r);
     if (r.error === 'STALE') return onStale(op, r.current);
     if (r.error === 'AUTH') { setSync('session expired'); return authExpired(); }
     if (r.error === 'BUSY' || r.error === 'SERVER') return retry();
@@ -503,6 +522,23 @@ function flush() {
     modal('Score not accepted', esc(r.message || r.error), [{ label: 'OK', cls: 'primary' }]);
     if (S.queue.length) flush();
   }).catch(function () { S.inflight = false; retry(); });
+}
+
+// A start or end request the server refused (court busy, referee changed the score, moved, …).
+function opRefused(op, r) {
+  S.queue = S.queue.filter(function (o) { return o.matchId !== op.matchId; }); persistQueue();
+  if (r.current) {
+    upsertLocal(r.current); setVersion(op.matchId, +r.current.Version);
+    if (op.type === 'end' && r.current.Status !== 'Done') { loadCur(r.current, true); saveCur(); }
+    else adopt(r.current);
+  }
+  if (op.type === 'start' && S.cur && S.cur.id === op.matchId && (!r.current || r.current.Status !== 'Live')) { S.cur = null; store('ump_cur', null); }
+  setSync();
+  if (S.view === 'score' && S.cur) renderScore(); else showCourt();
+  modal(op.type === 'start' ? 'Match could not start' : 'Match was NOT ended',
+    esc(r.message || r.error) + (op.type === 'end' ? '<br><br>Open the match from the court list, check the score and end it again.' : ''),
+    [{ label: 'OK', cls: 'primary' }]);
+  if (S.queue.length) flush();
 }
 
 function retry() {
@@ -574,7 +610,10 @@ function poll() {
   if (!S.auth) return;
   Api.get({ view: 'matches' }).then(function (list) {
     if (!Array.isArray(list)) return;
-    S.matches = list; S.lastFetch = Date.now();
+    var keep = {};
+    S.matches.forEach(function (x) { if (pendingFor(x['Match ID'])) keep[x['Match ID']] = x; });
+    S.matches = list.map(function (x) { return keep[x['Match ID']] && +x.Version <= (S.versions[x['Match ID']] || 0) ? keep[x['Match ID']] : x; });
+    S.lastFetch = Date.now();
     if (S.view === 'court') renderCourt();
     if (S.cur) reconcile();
   }).catch(function () { if (S.view === 'court') $('#court-upd').textContent = 'offline — showing last data'; });

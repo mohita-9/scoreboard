@@ -108,18 +108,17 @@ try:
         check("plus blocked after set complete", u.is_disabled("#plus-a") and u.is_disabled("#plus-b"))
         check("minus still available after set complete", not u.is_disabled("#minus-a"))
         u.screenshot(path=os.path.join(SHOTS, "umpire-offline.png"))
-        u.click("#btn-end2")
-        check("end blocked while unsaved", "Not saved" in u.text_content("#md-title")); u.click("#md-actions button")
-        u.reload(); u.wait_for_timeout(300)  # survives reload while offline? config is cached
+        u.click("#btn-end2"); u.wait_for_timeout(200)
+        check("end allowed while unsaved; confirm states winner", "Alpha" in u.inner_text("#md-body") and "16–15" in u.inner_text("#md-body"))
+        u.locator("#md-actions button", has_text="Confirm").click()
+        u.wait_for_selector("#v-court:not(.hidden)", timeout=500)
+        u.wait_for_function("document.querySelector('#sync').classList.contains('error')", timeout=8000)
+        check("end is instant even offline", u.locator("#list-done .mcard").count() == 1 and "NOT SAVED" in u.inner_text("#sync"))
+        u.reload(); u.wait_for_timeout(300)
         OFFLINE["on"] = False
         u.wait_for_function("document.querySelector('#sync').textContent.indexOf('Saved') >= 0", timeout=20000)
         mid = [m for m in api(view="matches") if m["Match ID"] == mid["Match ID"]][0]
-        check("points synced after reconnect (16-15)", mid["S1A"] == 16 and mid["S1B"] == 15)
-        u.wait_for_selector("#v-score:not(.hidden)")
-        u.click("#btn-end2"); u.wait_for_timeout(200)
-        check("end confirm states winner", "Alpha" in u.inner_text("#md-body") and "16–15" in u.inner_text("#md-body"))
-        u.locator("#md-actions button", has_text="Confirm").click()
-        u.wait_for_selector("#v-court:not(.hidden)"); u.wait_for_timeout(500)
+        check("result synced after reconnect (Done 16-15 Alpha)", mid["Status"] == "Done" and mid["S1A"] == 16 and mid["S1B"] == 15 and mid["Winner"] == "Alpha")
         u.locator("#list-done .mcard").first.click(); u.wait_for_selector("#v-score:not(.hidden)")
         check("done match: no edit at all", u.is_disabled("#minus-a") and u.is_disabled("#plus-a") and u.is_disabled("#btn-undo"))
         u.click("#btn-back"); u.wait_for_timeout(200)
@@ -128,7 +127,8 @@ try:
 
         # referee override shows up on umpire within a poll
         u.locator("#list-next .mcard").first.click(); u.check("#cf-check"); u.click("#cf-start")
-        u.wait_for_selector("#v-score:not(.hidden)")
+        u.wait_for_selector("#v-score:not(.hidden)", timeout=500)
+        check("start is instant", True)
         for _ in range(3): u.click("#plus-a")
         u.wait_for_function("document.querySelector('#sync').textContent.indexOf('Saved') >= 0", timeout=8000)
         live = [m for m in api(view="matches") if m["Status"] == "Live" and m["Court"] == 1][0]

@@ -183,5 +183,24 @@ check('token expires after 12h', post({ action: 'whoami', token: ref }).error ==
 // escaping is a client concern, but the raw value must survive the round trip
 check('team names stored raw', get({ view: 'teams' }).some(t => t['Team Name'] === '<b>Echo</b>'));
 
+// endMatch carrying the phone's final score
+{
+  const tk = post({ action: 'login', role: 'referee', pin: '9999' }).token;
+  const nm = post({ action: 'assignMatch', token: tk, match: { stage: 'Semi Final', court: 2, teamA: 'Charlie', teamB: 'Delta', queueOrder: 50 } }).match;
+  const ut = post({ action: 'login', role: 'umpire', court: 2, pin: '2222', umpire: 'Z' }).token;
+  // finish whatever is live on court 2 first
+  get({ view: 'matches' }).filter(m => m.Court === 2 && m.Status === 'Live').forEach(m => post({ action: 'overrideScore', token: tk, matchId: m['Match ID'], sets: [[15, 0]], markDone: m.Stage === 'Group' }));
+  get({ view: 'matches' }).filter(m => m.Court === 2 && m.Status === 'Live').forEach(m => post({ action: 'overrideScore', token: tk, matchId: m['Match ID'], sets: [[15, 0], [15, 0]], markDone: true }));
+  let x = post({ action: 'startMatch', token: ut, matchId: nm['Match ID'] });
+  check('start new semi', x.ok, x);
+  let vv = x.match.Version;
+  check('endMatch with undecided sets refused', post({ action: 'endMatch', token: ut, matchId: nm['Match ID'], version: vv, sets: [[15, 3], [10, 15]] }).error === 'NOT_DECIDED');
+  check('endMatch with impossible sets refused', post({ action: 'endMatch', token: ut, matchId: nm['Match ID'], version: vv, sets: [[17, 3]] }).error === 'INVALID');
+  x = post({ action: 'endMatch', token: ut, matchId: nm['Match ID'], version: vv, sets: [[15, 3], [13, 15], [15, 9]] });
+  check('endMatch with final sets saves score + winner', x.ok && x.match.Status === 'Done' && x.match.S3A === 15 && x.match['Sets A'] === 2 && x.match.Winner === 'Charlie', x);
+  check('endMatch repeat is harmless', post({ action: 'endMatch', token: ut, matchId: nm['Match ID'], version: vv, sets: [[15, 3], [13, 15], [15, 9]] }).ok);
+}
+
+{ const pv = get({ view: 'public' }); check('public view has matches + standings', Array.isArray(pv.matches) && Array.isArray(pv.standings) && pv.matches.length > 0); }
 console.log(`${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
