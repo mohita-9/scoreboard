@@ -11,6 +11,8 @@ What it changes (nothing else is touched — logos, CSS and layout stay exactly 
                the stray QR-code script at the bottom no longer throws an error
   knockout   : stages sort Pre Quarter Final -> Quarter Final -> Semi Final -> Final
                champion banner only appears once the Final has a winner
+  layout v2  : long team names wrap onto the next line (and step down in size) at every screen width;
+               MP / W / L / Pts columns have fixed widths so they are never cropped — phone, laptop and TV
 --url        : optionally point both pages at a new web app URL (keeps ?sheet=...)
 
 A .bak copy of each original is written next to it. Running it twice is safe (it detects an already-patched file).
@@ -20,6 +22,61 @@ import sys
 import shutil
 
 MARK = "/* league-patch v1 */"
+LAYOUT_MARK = "/* league-layout v2 */"
+
+# Applied on its own (also to files patched with v1 before this existed). CSS goes last so it wins.
+LAYOUT_CSS_COMMON = r"""
+/* league-layout v2 */
+/* a little breathing room at the screen edges on laptops / TVs (phones keep their own padding) */
+html { background-color: #07060c; }
+body { min-height: 100vh; }
+@media (max-width: 600px) { .lc-card { width: 100%; } }
+@media (min-width: 601px) { body { padding-left: clamp(10px, 2vw, 40px); padding-right: clamp(10px, 2vw, 40px); padding-bottom: 24px; } }
+/* names that are long step down a size; .long / .xlong are set by the small script at the bottom */
+.lc-team { white-space: normal !important; overflow: visible !important; text-overflow: clip !important; overflow-wrap: anywhere; line-height: 1.2; }
+"""
+
+LAYOUT_CSS_SCOREBOARD = r"""
+/* fixed column widths: the team column takes what is left and wraps, the numbers never get pushed out */
+.group-card table { table-layout: fixed !important; width: 100% !important; }
+thead th.th-rank, td.td-rank { width: clamp(22px, 2vw, 34px) !important; min-width: 0 !important; }
+thead th.th-num, td.td-num { width: clamp(30px, 3.2vw, 56px) !important; min-width: 0 !important; padding-left: 0 !important; padding-right: 0 !important; }
+thead th.th-pts, td.td-pts { width: clamp(38px, 4.2vw, 72px) !important; min-width: 0 !important; }
+thead th { overflow: visible !important; }
+td.td-team { white-space: normal !important; overflow: visible !important; text-overflow: clip !important;
+  overflow-wrap: anywhere; word-break: normal; line-height: 1.25; padding-right: 8px !important; }
+td.td-team.long  { font-size: clamp(11px, 1.05vw, 16px) !important; }
+td.td-team.xlong { font-size: clamp(10px, 0.95vw, 14px) !important; letter-spacing: -0.005em; }
+"""
+
+LAYOUT_CSS_KNOCKOUT = r"""
+.team-row { gap: 10px; align-items: center; }
+.team-name { min-width: 0; overflow-wrap: anywhere; line-height: 1.25; }
+.team-name.long  { font-size: clamp(13px, 1.2vw, 18px) !important; }
+.team-name.xlong { font-size: clamp(12px, 1.05vw, 16px) !important; }
+.winner-badge { white-space: nowrap; display: inline-block; }
+.team-score { flex: 0 0 auto; }
+.champion-name { overflow-wrap: anywhere; max-width: 100%; }
+"""
+
+LAYOUT_JS = r"""
+<script>
+/* league-layout v2: mark long team names so they step down a size (they always wrap, never crop) */
+(function () {
+  function fit() {
+    var els = document.querySelectorAll(".td-team, .team-name, .lc-team");
+    for (var i = 0; i < els.length; i++) {
+      var el = els[i], t = el.firstChild && el.firstChild.nodeType === 3 ? el.firstChild.nodeValue : el.textContent;
+      var n = String(t || "").trim().length;
+      el.classList.toggle("long", n > 22 && n <= 38);
+      el.classList.toggle("xlong", n > 38);
+    }
+  }
+  fit();
+  if (window.MutationObserver) new MutationObserver(fit).observe(document.body, { childList: true, subtree: true });
+})();
+</script>
+"""
 
 HELPERS = r"""
   /* league-patch v1 */
@@ -161,6 +218,16 @@ def patch_knockout(s):
     return s
 
 
+def patch_layout(s, page_css):
+    if LAYOUT_MARK in s:
+        return s, False
+    s = rep(s, "</style>\n</head>", LAYOUT_CSS_COMMON + page_css + "</style>\n</head>", "end of <style> (layout)")
+    i = s.rfind("</body>")
+    if i < 0:
+        raise SystemExit("Could not find </body>")
+    return s[:i] + LAYOUT_JS + s[i:], True
+
+
 def set_url(s, url):
     base = url.split("?")[0]
     return re.sub(r'(const APPS_SCRIPT_URL = ")https://script\.google\.com/macros/s/[^"?]+/exec', lambda m: m.group(1) + base, s)
@@ -172,14 +239,15 @@ def main(argv):
         i = argv.index("--url"); url = argv[i + 1]; argv = argv[:i] + argv[i + 2:]
     if len(argv) != 2:
         print(__doc__); return 1
-    for path, fn in ((argv[0], patch_scoreboard), (argv[1], patch_knockout)):
+    for path, fn, css in ((argv[0], patch_scoreboard, LAYOUT_CSS_SCOREBOARD), (argv[1], patch_knockout, LAYOUT_CSS_KNOCKOUT)):
         src = open(path, encoding="utf-8").read()
-        if MARK in src:
+        if MARK in src and LAYOUT_MARK in src:
             out = src
             print("%s: already patched" % path)
         else:
             shutil.copyfile(path, path + ".bak")
-            out = fn(src)
+            out = src if MARK in src else fn(src)
+            out, _ = patch_layout(out, css)
             print("%s: patched (backup at %s.bak)" % (path, path))
         if url:
             out = set_url(out, url)

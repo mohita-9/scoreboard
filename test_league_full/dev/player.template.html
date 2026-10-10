@@ -140,12 +140,12 @@ function render() {
   var me = P.standings.filter(function (r) { return String(r['Team Name']).toLowerCase() === P.team.toLowerCase(); })[0];
   if (me) {
     var grp = P.standings.filter(function (r) { return r['Group Name'] === me['Group Name']; })
-      .sort(function (a, b) { return (+b['Total Points'] || 0) - (+a['Total Points'] || 0); });
+      .sort(function (a, b) { return ((+a.Rank || 99) - (+b.Rank || 99)) || ((+b['Total Points'] || 0) - (+a['Total Points'] || 0)); });
     var rank = grp.indexOf(me) + 1;
-    html += '<h2 class="sec">Group ' + esc(me['Group Name']) + ' · you are #' + rank + '</h2><div class="card"><table class="st"><thead><tr><th></th><th>Team</th><th>MP</th><th>W</th><th>L</th><th>Pts</th></tr></thead><tbody>' +
+    html += '<h2 class="sec">Group ' + esc(me['Group Name']) + ' · you are #' + rank + '</h2><div class="card"><table class="st"><thead><tr><th></th><th>Team</th><th>MP</th><th>W</th><th>L</th><th>+/-</th><th>Pts</th></tr></thead><tbody>' +
       grp.map(function (r, i) {
         return '<tr class="' + (r === me ? 'me' : '') + '"><td>' + (i + 1) + '</td><td>' + esc(r['Team Name']) + '</td><td>' + esc(r['Total Matches']) + '</td><td>' + esc(r['Matches Won']) +
-          '</td><td>' + esc(r['Matches Lost']) + '</td><td class="pts">' + esc(r['Total Points']) + '</td></tr>';
+          '</td><td>' + esc(r['Matches Lost']) + '</td><td>' + (r['Point Diff'] > 0 ? '+' : '') + esc(r['Point Diff'] === undefined ? '' : r['Point Diff']) + '</td><td class="pts">' + esc(r['Total Points']) + '</td></tr>';
       }).join('') + '</tbody></table></div>';
   }
   $('#content').innerHTML = html;

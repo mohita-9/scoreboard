@@ -104,6 +104,33 @@ Only the `Settings` tab changes — no code edits:
 Scoring formats are rows in the `Config` tab (Sets to win, Target, Cap, Decider Target, Decider Cap, Order). To start fresh,
 clear the data rows of `Matches`, `Teams` and `Log` (keep the header row) and run `refreshCaches`.
 
+## Knockout teams fill in automatically
+
+Write knockout fixtures with **slots** instead of team names. The server replaces them with the real team as soon as the result is known:
+
+| Slot text (any of these wordings) | Becomes |
+|---|---|
+| `G1 1st`, `G1 Winner`, `1st G1`, `Group 1 Winner` | team ranked 1st in group G1 — once **every** G1 match is Done |
+| `G8 2nd`, `G8 Runner-up`, `Group 8 2nd` | team ranked 2nd in group G8 |
+| `PQ1 Winner`, `Winner of PQ1` | winner of match PQ1 |
+| `SF1 Loser` | loser of match SF1 (e.g. for a 3rd-place match) |
+
+Pairings are whatever the fixture says (e.g. `G1 1st` v `G8 2nd`, `G2 1st` v `G7 2nd`). Change the slot text to change the draw.
+
+**Group ranking (Sheet1):** league points → point difference (rally points won minus lost in group matches) → points scored → head-to-head. If teams are still level after all of that, Sheet1 shows *Tied — check* and the slot is **not** guessed.
+
+**Qualifiers tab** — one row per knockout side, so the referee can check everything:
+`Slot` · `Auto Team` (what the server worked out) · `Manual Team` · `Using` (what the match shows) · `Status` · `Note` (why, e.g. *Rank 1 in G1 (6 pts, diff 17)*).
+
+- **Status = Waiting** — group or match not finished yet. **Filled** — done automatically. **TIE — needs manual** — type the team in **Manual Team**.
+- **Manual Team** overrides the automatic choice and is kept until you clear it. Clearing it goes back to automatic. It applies as soon as you type it (or use the **League → Update standings & knockout now** menu).
+- Teams only change while the knockout match is **Scheduled**. Once it has started they are locked; if an earlier result is changed afterwards the row shows **CONFLICT** so you can sort it out by hand.
+- If an earlier result is unlocked/changed before the next match starts, the next match updates (or goes back to the slot text) by itself.
+- An umpire cannot start a knockout match while it still shows a slot ("Teams not decided yet").
+- In the referee page, picking a real team in **Edit** pins it (auto-fill stops for that side). The slot is still in the dropdown to switch back.
+
+**Existing sheet:** paste the new `Code.gs`, run `setup()` once (adds the `Slot A/Slot B` columns, the Sheet1 columns and the Qualifiers tab), then **Deploy → Manage deployments → Edit → New version**. Knockout matches already imported with `G1 1st` / `PQ1 Winner` as team names are picked up automatically.
+
 ## Files
 
 - `Code.gs` — backend. The scoring rules block between `SHARED SCORING RULES` markers is byte-for-byte the same in every page.

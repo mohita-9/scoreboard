@@ -306,7 +306,7 @@ function renderMatches() {
     var rule = R.cfg.stages[m.Stage], id = esc(m['Match ID']), done = m.Status === 'Done';
     var st = m.Status === 'Live' ? '<span class="pill live"><span class="dot"></span>Live</span>' : done ? '<span class="pill done">Done</span>' : '<span class="pill">Scheduled</span>';
     html += '<tr><td>' + esc(m.Court) + '</td><td>' + esc(m['Queue Order']) + '</td><td>' + id + '</td><td>' + esc(m.Stage) + '</td><td>' + esc(m.Group) +
-      '</td><td>' + esc(m['Team A']) + '</td><td>' + esc(m['Team B']) + '</td><td>' + (m.Status === 'Scheduled' ? '' : esc(scoreLine(m, rule))) +
+      '</td><td>' + teamCell(m, 'A') + '</td><td>' + teamCell(m, 'B') + '</td><td>' + (m.Status === 'Scheduled' ? '' : esc(scoreLine(m, rule))) +
       '</td><td>' + (rule && rule.setsToWin > 1 ? esc(m['Sets A']) + '–' + esc(m['Sets B']) : '') + '</td><td>' + st + '</td><td>' + esc(m.Winner) +
       '</td><td>' + esc(m.Umpire) + '</td><td class="muted">' + esc(relTime(m['Updated At'])) + '</td><td><div class="acts">' +
       (done ? '' : '<button class="btn" data-a="edit" data-id="' + id + '">Edit</button><button class="btn" data-a="move" data-id="' + id + '">Court</button>') +
@@ -328,9 +328,18 @@ $('#tbl').addEventListener('click', function (e) {
 
 function findMatch(id) { return R.matches.filter(function (m) { return m['Match ID'] === id; })[0]; }
 
-function teamOptions(selected) {
+// team name, plus where a knockout team came from ("from G1 1st") once it has been filled in
+function teamCell(m, s) {
+  var slot = m['Slot ' + s], team = m['Team ' + s];
+  if (!slot) return esc(team);
+  return slot === team ? '<span class="muted">' + esc(team) + '</span>' : esc(team) + '<div class="muted" style="font-size:11px">from ' + esc(slot) + '</div>';
+}
+
+function teamOptions(selected, slot) {
   var names = R.teams.map(function (t) { return t['Team Name']; });
   if (selected && names.indexOf(selected) < 0) names.unshift(selected);
+  // knockout: the slot ("G1 1st", "PQ1 Winner") is offered too, so a pinned team can go back to automatic
+  if (slot && names.indexOf(slot) < 0) names.unshift(slot);
   return '<option value="">— choose —</option>' + names.map(function (n) { return '<option' + (n === selected ? ' selected' : '') + '>' + esc(n) + '</option>'; }).join('');
 }
 
@@ -345,8 +354,8 @@ function editMatch(m) {
     Object.keys(groups).map(function (g) { return '<option value="' + esc(g) + '">'; }).join('') + '</datalist></div>' +
     '<div><label>Court</label><select id="e-court">' + courts + '</select></div>' +
     '<div><label>Queue order</label><input id="e-q" type="number" min="1" value="' + esc(m['Queue Order'] || '') + '" placeholder="end"></div></div>' +
-    '<label>Team A</label><select id="e-a">' + teamOptions(m['Team A']) + '</select>' +
-    '<label>Team B</label><select id="e-b">' + teamOptions(m['Team B']) + '</select>' +
+    '<label>Team A</label><select id="e-a">' + teamOptions(m['Team A'], m['Slot A']) + '</select>' +
+    '<label>Team B</label><select id="e-b">' + teamOptions(m['Team B'], m['Slot B']) + '</select>' +
     (R.teams.length ? '' : '<div class="err-text">No teams yet — add them under Teams &amp; links first.</div>'),
     [{ label: 'Cancel', cls: 'ghost' }, { label: 'Save', cls: 'primary', fn: function () {
       var a = $('#e-a').value, b = $('#e-b').value;

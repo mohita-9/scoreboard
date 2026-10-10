@@ -486,6 +486,26 @@ thead th.th-rank, td.td-rank { width: 24px !important; min-width: 24px !importan
 .lc-pts { font-family: "Barlow Condensed", sans-serif; font-weight: 700; font-size: clamp(18px, 1.8vw, 28px); text-align: right; font-variant-numeric: tabular-nums; line-height: 1.15; }
 .lc-a { color: var(--magenta); } .lc-b { color: var(--cyan); }
 .lc-meta { grid-column: 1 / -1; font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-sub); margin-top: 2px; }
+
+/* league-layout v2 */
+/* a little breathing room at the screen edges on laptops / TVs (phones keep their own padding) */
+html { background-color: #07060c; }
+body { min-height: 100vh; }
+@media (max-width: 600px) { .lc-card { width: 100%; } }
+@media (min-width: 601px) { body { padding-left: clamp(10px, 2vw, 40px); padding-right: clamp(10px, 2vw, 40px); padding-bottom: 24px; } }
+/* names that are long step down a size; .long / .xlong are set by the small script at the bottom */
+.lc-team { white-space: normal !important; overflow: visible !important; text-overflow: clip !important; overflow-wrap: anywhere; line-height: 1.2; }
+
+/* fixed column widths: the team column takes what is left and wraps, the numbers never get pushed out */
+.group-card table { table-layout: fixed !important; width: 100% !important; }
+thead th.th-rank, td.td-rank { width: clamp(22px, 2vw, 34px) !important; min-width: 0 !important; }
+thead th.th-num, td.td-num { width: clamp(30px, 3.2vw, 56px) !important; min-width: 0 !important; padding-left: 0 !important; padding-right: 0 !important; }
+thead th.th-pts, td.td-pts { width: clamp(38px, 4.2vw, 72px) !important; min-width: 0 !important; }
+thead th { overflow: visible !important; }
+td.td-team { white-space: normal !important; overflow: visible !important; text-overflow: clip !important;
+  overflow-wrap: anywhere; word-break: normal; line-height: 1.25; padding-right: 8px !important; }
+td.td-team.long  { font-size: clamp(11px, 1.05vw, 16px) !important; }
+td.td-team.xlong { font-size: clamp(10px, 0.95vw, 14px) !important; letter-spacing: -0.005em; }
 </style>
 </head>
 <body>
@@ -562,7 +582,7 @@ thead th.th-rank, td.td-rank { width: 24px !important; min-width: 24px !importan
 
 <script>
   // ===== CONFIGURE =====
-  const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxgQbe1xVTKXKd8D4l86j2IIhuyKSexp9OQPmc7_yqVFGPTH1SQJSZFdy-dhaADSSnWpA/exec?sheet=Sheet1";
+  const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxpFMGoyn6GmQFqfc5n-0-xJDhC0WuBfmUrGNqaw3VTBxJm5tFFGPk9kzi0z6q_FdhJOA/exec?sheet=Sheet1";
   const POLL_MS = 8000;
   // =====================
 
@@ -867,6 +887,23 @@ thead th.th-rank, td.td-rank { width: 24px !important; min-width: 24px !importan
     colorLight: "rgba(0,0,0,0)",
     correctLevel: QRCode.CorrectLevel.H
   });
+</script>
+
+<script>
+/* league-layout v2: mark long team names so they step down a size (they always wrap, never crop) */
+(function () {
+  function fit() {
+    var els = document.querySelectorAll(".td-team, .team-name, .lc-team");
+    for (var i = 0; i < els.length; i++) {
+      var el = els[i], t = el.firstChild && el.firstChild.nodeType === 3 ? el.firstChild.nodeValue : el.textContent;
+      var n = String(t || "").trim().length;
+      el.classList.toggle("long", n > 22 && n <= 38);
+      el.classList.toggle("xlong", n > 38);
+    }
+  }
+  fit();
+  if (window.MutationObserver) new MutationObserver(fit).observe(document.body, { childList: true, subtree: true });
+})();
 </script>
 </body>
 </html>

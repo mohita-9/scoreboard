@@ -64,6 +64,19 @@ h2.sec::after { content: ""; flex: 1; height: 1px; background: linear-gradient(9
 .setwon .big { font-family: "Barlow Condensed", sans-serif; font-size: 28px; font-weight: 700; text-transform: uppercase; margin-bottom: 10px; word-break: break-word; }
 .bottombar { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-top: 14px; }
 .bottombar .btn { min-height: 72px; font-size: 16px; }
+/* which team stands on which side (seen from the umpire chair) */
+.sides { display: grid; grid-template-columns: 1fr auto 1fr; gap: 8px; align-items: stretch; margin: 6px 0 4px; }
+.sides .sd { border-radius: 12px; padding: 10px 8px; text-align: center; font-weight: 700; font-size: 16px; line-height: 1.2;
+  word-break: break-word; min-height: 70px; display: flex; flex-direction: column; justify-content: center; min-width: 0; }
+.sides .sd small { display: block; font-size: 11px; letter-spacing: .16em; color: rgba(255,255,255,0.7); font-weight: 600; margin-bottom: 5px; }
+.sides .sd.a { border: 2px solid var(--magenta); background: var(--magenta-dim); }
+.sides .sd.b { border: 2px solid var(--cyan); background: var(--cyan-dim); }
+.sides .swap { min-width: 56px; padding: 0 10px; font-size: 22px; }
+.sides-q { font-size: 13px; color: var(--text-sub); text-align: center; margin-top: 4px; }
+.panels.flip .panel.a { order: 2; }
+.panel .side { text-align: center; font-size: 11px; font-weight: 700; letter-spacing: .16em; color: rgba(255,255,255,0.8); }
+.swaprow { display: flex; justify-content: center; margin-top: 10px; }
+.swaprow .btn { min-height: 44px; font-size: 14px; }
 .readonly-note { text-align: center; color: var(--text-sub); margin: 12px 0; }
 .moved { background: var(--bad); color: #fff; padding: 12px; border-radius: 10px; margin: 10px 0; font-weight: 600; text-align: center; }
 </style>
@@ -108,7 +121,9 @@ h2.sec::after { content: ""; flex: 1; height: 1px; background: linear-gradient(9
         <div class="t a" id="cf-a"></div><div class="vs">VS</div><div class="t b" id="cf-b"></div>
       </div>
       <div class="rulebox" id="cf-rule"></div>
-      <label class="check"><input type="checkbox" id="cf-check"> Confirm teams match the players on court</label>
+      <div class="sides-q">Where is each team standing? (as seen from the umpire chair)</div>
+      <div class="sides" id="cf-sides"></div>
+      <label class="check"><input type="checkbox" id="cf-check"> Confirm teams and sides match the players on court</label>
       <div class="row">
         <button class="btn ghost" id="cf-back">Back</button>
         <button class="btn primary" id="cf-start" disabled>Start Match</button>
@@ -126,6 +141,7 @@ h2.sec::after { content: ""; flex: 1; height: 1px; background: linear-gradient(9
     <div class="golden" id="sc-golden">⚡ GOLDEN POINT ⚡</div>
     <div class="panels">
       <div class="panel a">
+        <div class="side" id="sc-sda"></div>
         <div class="name" id="sc-na"></div>
         <div class="score" id="sc-a">0</div>
         <div class="sets" id="sc-sa"></div>
@@ -133,6 +149,7 @@ h2.sec::after { content: ""; flex: 1; height: 1px; background: linear-gradient(9
         <button class="minus" id="minus-a" aria-label="Remove point from team A">−</button>
       </div>
       <div class="panel b">
+        <div class="side" id="sc-sdb"></div>
         <div class="name" id="sc-nb"></div>
         <div class="score" id="sc-b">0</div>
         <div class="sets" id="sc-sb"></div>
@@ -145,6 +162,7 @@ h2.sec::after { content: ""; flex: 1; height: 1px; background: linear-gradient(9
       <button class="btn primary hidden" id="btn-nextset" style="width:100%;min-height:72px;font-size:20px">Next Set ▶</button>
       <button class="btn red hidden" id="btn-end2" style="width:100%;min-height:72px;font-size:20px">End Match</button>
     </div>
+    <div class="swaprow"><button class="btn ghost" id="btn-swap">⇄ Teams changed sides</button></div>
     <div class="readonly-note hidden" id="sc-ro">This match is finished and locked. Only the referee can change it.</div>
     <div class="bottombar">
       <button class="btn" id="btn-back">◀ Court</button>
@@ -300,7 +318,46 @@ function showConfirm(m) {
   $('#cf-a').textContent = m['Team A']; $('#cf-b').textContent = m['Team B'];
   $('#cf-rule').textContent = Rules.describe(S.cfg.stages[m.Stage], 1);
   $('#cf-check').checked = false; $('#cf-start').disabled = true; $('#cf-err').textContent = '';
+  var known = sidesOf(confirmId);
+  cfLeft = known ? known.left[0] : 'A';
+  renderCfSides(m);
   show('confirm');
+}
+var cfLeft = 'A';
+function renderCfSides(m) {
+  $('#cf-sides').innerHTML = sidesHtml(cfLeft, m['Team A'], m['Team B'], 'cf-swap');
+  $('#cf-swap').onclick = function () { cfLeft = cfLeft === 'A' ? 'B' : 'A'; renderCfSides(m); };
+}
+
+/* ---------- sides (which team is on the umpire's left / right) ----------
+   Kept on this phone per match: left[set] = 'A' or 'B'. Teams change ends before every new set,
+   and once in the deciding set when the leader reaches half the target (e.g. 11 of 21, 8 of 15). */
+function sidesOf(id) { var all = store('ump_sides') || {}; return all[id] || null; }
+function saveSides(id, sd) {
+  var all = store('ump_sides') || {}; all[id] = sd;
+  var keys = Object.keys(all); if (keys.length > 40) delete all[keys[0]];
+  store('ump_sides', all);
+}
+function other(x) { return x === 'A' ? 'B' : 'A'; }
+function leftOn(set) {
+  var sd = sidesOf(S.cur.id), l = sd && sd.left;
+  if (!l) return set % 2 ? 'B' : 'A';
+  for (var i = set; i >= 0; i--) if (l[i]) return (set - i) % 2 ? other(l[i]) : l[i];
+  return 'A';
+}
+function sidesHtml(left, teamA, teamB, swapId) {
+  function box(side, where) {
+    return '<div class="sd ' + (side === 'A' ? 'a' : 'b') + '"><small>' + where + '</small>' + esc(side === 'A' ? teamA : teamB) + '</div>';
+  }
+  return box(left, '◀ LEFT') + '<button class="btn ghost swap" id="' + swapId + '" aria-label="Swap sides">⇄</button>' + box(other(left), 'RIGHT ▶');
+}
+// Ask (or confirm) the sides for a set. Swap reopens the dialog; Confirm saves and continues.
+function askSides(set, proposed, title, intro, then) {
+  var c = S.cur;
+  modal(title, intro + '<div class="sides" style="margin-top:12px">' + sidesHtml(proposed, c.teamA, c.teamB, 'md-swap') + '</div>', [
+    { label: 'Confirm sides', cls: 'primary', fn: function () {
+      var sd = sidesOf(c.id) || { left: [], mid: {} }; sd.left[set] = proposed; sd.mid = sd.mid || {}; saveSides(c.id, sd); then(); } }]);
+  $('#md-swap').onclick = function () { askSides(set, other(proposed), title, intro, then); };
 }
 $('#cf-check').onchange = function () { $('#cf-start').disabled = !this.checked; };
 $('#cf-back').onclick = showCourt;
@@ -311,6 +368,7 @@ $('#cf-start').onclick = function () {
   if (!m) return;
   var live = S.matches.filter(function (x) { return x.Status === 'Live' && String(x.Court) === S.auth.court && x['Match ID'] !== confirmId; })[0];
   if (live && !endingFor(live['Match ID'])) { $('#cf-err').textContent = 'Match ' + live['Match ID'] + ' is still live on this court. End it first.'; return; }
+  saveSides(confirmId, { left: [cfLeft], mid: {} });
   var local = Object.assign({}, m, { Status: 'Live', Umpire: S.auth.umpire });
   upsertLocal(local); loadCur(local, true);
   S.queue.push({ type: 'start', matchId: confirmId }); persistQueue(); setSync(); flushSoon(0);
@@ -352,6 +410,11 @@ function renderScore() {
   $('#sc-id').textContent = c.id;
   $('#sc-rule').textContent = Rules.describe(r, v + 1);
   $('#sc-na').textContent = c.teamA; $('#sc-nb').textContent = c.teamB;
+  var left = leftOn(v);
+  $('.panels').classList.toggle('flip', left === 'B');
+  $('#sc-sda').textContent = left === 'A' ? '◀ LEFT' : 'RIGHT ▶';
+  $('#sc-sdb').textContent = left === 'B' ? '◀ LEFT' : 'RIGHT ▶';
+  $('#btn-swap').disabled = readonly;
   $('#sc-a').textContent = s[0]; $('#sc-b').textContent = s[1];
   $('#sc-sa').textContent = r.setsToWin > 1 ? 'Sets ' + ms.setsA : '';
   $('#sc-sb').textContent = r.setsToWin > 1 ? 'Sets ' + ms.setsB : '';
@@ -411,6 +474,18 @@ function change(side, delta) {
   c.sets[v] = s;
   if (navigator.vibrate) navigator.vibrate(delta > 0 ? 15 : [10, 40, 10]);
   saveCur(); enqueue(c.id, v, s); renderScore();
+  if (delta > 0) midSetEnds(v, s, lim);
+}
+// Deciding set of a best-of-3: teams change ends once when the leader reaches half the target.
+function midSetEnds(v, s, lim) {
+  var r = rule(), c = S.cur;
+  if (r.setsToWin < 2 || v !== Rules.maxSets(r) - 1) return;
+  var half = Math.ceil(lim.T / 2), sd = sidesOf(c.id) || { left: [], mid: {} };
+  sd.mid = sd.mid || {};
+  if (sd.mid[v] || Math.max(s[0], s[1]) !== half) return;
+  var now = leftOn(v);
+  sd.mid[v] = 1; sd.left[v] = other(now); saveSides(c.id, sd); renderScore();
+  askSides(v, other(now), 'Change ends', 'Score reached ' + half + ' in the deciding set — teams change ends now.', renderScore);
 }
 function laterSetPlayed(v) {
   for (var i = v + 1; i < 3; i++) if (S.cur.sets[i][0] || S.cur.sets[i][1]) return true;
@@ -432,7 +507,17 @@ $('#btn-undo').onclick = function () {
 
 $('#btn-nextset').onclick = function () {
   var ms = Rules.matchStatus(rule(), S.cur.sets);
-  if (ms.valid && !ms.decided) { S.cur.viewSet = ms.currentSet; saveCur(); renderScore(); }
+  if (!ms.valid || ms.decided) return;
+  var n = ms.currentSet, prev = leftOn(n - 1);
+  // teams change ends before every new set: suggest the swap, the umpire confirms what they see
+  askSides(n, other(prev), 'Set ' + (n + 1) + ' — change ends', 'Teams swap sides for set ' + (n + 1) + '. Check and confirm:', function () {
+    S.cur.viewSet = n; saveCur(); renderScore();
+  });
+};
+$('#btn-swap').onclick = function () {
+  var c = S.cur; if (!c) return;
+  var v = c.viewSet, sd = sidesOf(c.id) || { left: [], mid: {} };
+  sd.left[v] = other(leftOn(v)); saveSides(c.id, sd); renderScore();
 };
 
 $('#btn-back').onclick = function () { showCourt(); };

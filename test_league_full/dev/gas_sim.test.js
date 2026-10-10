@@ -105,7 +105,7 @@ check('Sheet1 loser 1/0/1/0', standing('Bravo') === '1/0/1/0', standing('Bravo')
 check('done match is locked for umpire', post({ action: 'setScore', token: u1, matchId: G1, set: 1, a: 15, b: 12, version: v }).error === 'DONE');
 check('endMatch twice is harmless', post({ action: 'endMatch', token: u1, matchId: G1, version: v }).ok);
 const s1 = get({ sheet: 'Sheet1' });
-check('Sheet1 view keeps column names', Object.keys(s1[0]).join('|') === 'Group Name|Team Name|Total Matches|Matches Won|Matches Lost|Total Points', Object.keys(s1[0]));
+check('Sheet1 view keeps column names', Object.keys(s1[0]).slice(0, 6).join('|') === 'Group Name|Team Name|Total Matches|Matches Won|Matches Lost|Total Points', Object.keys(s1[0]));
 
 // golden point in group: 15-15 then 16-15
 r = post({ action: 'setScore', token: u2, matchId: G2, set: 1, a: 15, b: 15, version: v2 });

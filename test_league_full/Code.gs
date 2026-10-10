@@ -85,15 +85,18 @@ var Rules = (function () {
 
 
 var TAB = { MATCHES: 'Matches', TEAMS: 'Teams', LOG: 'Log', CONFIG: 'Config', SETTINGS: 'Settings',
-            STANDINGS: 'Sheet1', KNOCKOUT: 'Knockout' };
+            STANDINGS: 'Sheet1', KNOCKOUT: 'Knockout', QUALIFIERS: 'Qualifiers' };
 
 var MATCH_HEADERS = ['Match ID', 'Stage', 'Group', 'Court', 'Queue Order', 'Team A', 'Team B',
-  'S1A', 'S1B', 'S2A', 'S2B', 'S3A', 'S3B', 'Sets A', 'Sets B', 'Status', 'Winner', 'Umpire', 'Updated At', 'Version'];
+  'S1A', 'S1B', 'S2A', 'S2B', 'S3A', 'S3B', 'Sets A', 'Sets B', 'Status', 'Winner', 'Umpire', 'Updated At', 'Version',
+  'Slot A', 'Slot B']; // Slot = where a knockout team comes from ("G1 1st", "PQ1 Winner"); filled in automatically
 var TEAM_HEADERS = ['Team Name', 'Group'];
 var LOG_HEADERS = ['Timestamp', 'Match ID', 'Action', 'Court', 'Umpire', 'Old Value', 'New Value', 'Version'];
 var CONFIG_HEADERS = ['Stage', 'Sets to win', 'Target', 'Cap (golden)', 'Decider Target', 'Decider Cap', 'Order'];
 var SETTINGS_HEADERS = ['Key', 'Value', 'Notes'];
-var STANDINGS_HEADERS = ['Group Name', 'Team Name', 'Total Matches', 'Matches Won', 'Matches Lost', 'Total Points'];
+var STANDINGS_HEADERS = ['Group Name', 'Team Name', 'Total Matches', 'Matches Won', 'Matches Lost', 'Total Points',
+  'Points For', 'Points Against', 'Point Diff', 'Rank', 'Note'];
+var QUALIFIER_HEADERS = ['Match ID', 'Stage', 'Side', 'Slot', 'Auto Team', 'Manual Team', 'Using', 'Status', 'Note'];
 var KNOCKOUT_HEADERS = ['Match No', 'Stage', 'Order', 'Team A', 'Team B', 'Score A', 'Score B', 'Status', 'Winner'];
 
 var DEFAULT_STAGES = [
@@ -133,6 +136,9 @@ function setup() {
   ensureTab_(ss, TAB.LOG, LOG_HEADERS);
   ensureTab_(ss, TAB.STANDINGS, STANDINGS_HEADERS);
   ensureTab_(ss, TAB.KNOCKOUT, KNOCKOUT_HEADERS);
+  ensureTab_(ss, TAB.QUALIFIERS, QUALIFIER_HEADERS);
+  ensureHeaders_(ss.getSheetByName(TAB.MATCHES), MATCH_HEADERS);
+  ensureHeaders_(ss.getSheetByName(TAB.QUALIFIERS), QUALIFIER_HEADERS);
   var cfg = ensureTab_(ss, TAB.CONFIG, CONFIG_HEADERS);
   if (cfg.getLastRow() < 2) cfg.getRange(2, 1, DEFAULT_STAGES.length, CONFIG_HEADERS.length).setValues(DEFAULT_STAGES);
   var set = ensureTab_(ss, TAB.SETTINGS, SETTINGS_HEADERS);
@@ -144,6 +150,8 @@ function setup() {
   ss.getSheetByName(TAB.MATCHES).getRange('A:C').setNumberFormat('@');
   ss.getSheetByName(TAB.MATCHES).getRange('F:G').setNumberFormat('@');
   ss.getSheetByName(TAB.MATCHES).getRange('Q:S').setNumberFormat('@');
+  ss.getSheetByName(TAB.MATCHES).getRange('U:V').setNumberFormat('@');
+  ss.getSheetByName(TAB.QUALIFIERS).getRange('A:I').setNumberFormat('@');
   ss.getSheetByName(TAB.TEAMS).getRange('A:B').setNumberFormat('@');
   var props = PropertiesService.getScriptProperties();
   if (!props.getProperty('TOKEN_SECRET')) props.setProperty('TOKEN_SECRET', Utilities.getUuid() + Utilities.getUuid());
@@ -162,6 +170,26 @@ function ensureTab_(ss, name, headers) {
     sh.setFrozenRows(1);
   }
   return sh;
+}
+
+// Add any missing header cells (e.g. new columns on a sheet made by an older version).
+function ensureHeaders_(sh, headers) {
+  var have = sh.getRange(1, 1, 1, headers.length).getValues()[0];
+  if (headers.some(function (h, i) { return have[i] !== h; })) sh.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight('bold');
+}
+
+// Spreadsheet menu + manual overrides typed into the Qualifiers tab take effect straight away.
+function onOpen() {
+  SpreadsheetApp.getUi().createMenu('League')
+    .addItem('Update standings & knockout now', 'refreshCaches')
+    .addToUi();
+}
+function onEdit(e) {
+  try {
+    var sh = e && e.range && e.range.getSheet();
+    if (!sh || sh.getName() !== TAB.QUALIFIERS || e.range.getRow() < 2) return;
+    if (e.range.getColumn() <= 6 && e.range.getLastColumn() >= 6) withLock_(function () { recompute_(); clearCaches_(); });
+  } catch (err) { /* never block the person editing */ }
 }
 
 /* ------------------------------------------------------------- HTTP entry */
@@ -268,6 +296,8 @@ function startMatch_(b, tok) {
   checkCourt_(m, tok);
   if (m['Status'] === STATUS.DONE) throw err_('DONE', 'Match already finished', m);
   if (m['Status'] === STATUS.LIVE) return ok_(m);
+  var waiting = unresolvedSlots_(m, db);
+  if (waiting.length) throw err_('NOT_READY', 'Teams not decided yet: ' + waiting.join(' / ') + '. The referee can set them in the Qualifiers tab.', m);
   var busy = db.objs.filter(function (x) { return x['Status'] === STATUS.LIVE && String(x['Court']) === String(m['Court']) && x['Match ID'] !== m['Match ID']; });
   if (busy.length) throw err_('COURT_BUSY', 'Match ' + busy[0]['Match ID'] + ' is still live on this court');
   var old = snapshot_(m);
@@ -369,7 +399,16 @@ function upsertMatch_(db, d, tok, isBulk) {
   var m = existing || blankMatch_(id || nextId_(db));
   var old = existing ? snapshot_(m) : '';
   m['Stage'] = stage; m['Group'] = String(d.group || d['Group'] || '').trim();
-  m['Court'] = court; m['Queue Order'] = q; m['Team A'] = teamA; m['Team B'] = teamB;
+  m['Court'] = court; m['Queue Order'] = q;
+  // Knockout teams written as "G1 1st" / "PQ1 Winner" are slots the server fills in later.
+  // Typing a real name over an auto-filled team pins it (stops auto-fill for that side).
+  [['A', teamA], ['B', teamB]].forEach(function (p) {
+    var side = p[0], name = p[1], prevTeam = existing ? String(existing['Team ' + side]) : null;
+    if (stage === 'Group') m['Slot ' + side] = '';
+    else if (isSlotRef_(name, db)) m['Slot ' + side] = name;
+    else if (!(existing && name === prevTeam)) m['Slot ' + side] = '';
+    m['Team ' + side] = name;
+  });
   var st = Rules.matchStatus(stages[stage], setsOf_(m));
   if (!st.valid) throw err_('INVALID', 'Existing scores do not fit ' + stage + ': ' + st.error);
   applySets_(m, setsOf_(m), st);
@@ -476,30 +515,22 @@ function deleteMatch_(b, tok) {
 
 /* ------------------------------------------------------------- standings */
 
-// Sheet1 = group table from Done group matches only. Knockout = every non-group match.
+// Sheet1 = group table from Done group matches only (with point difference and rank).
+// Then knockout slots ("G1 1st", "PQ1 Winner") are filled in, then the Knockout tab is rebuilt.
 function recompute_(db, opts) {
   db = db || readMatches_();
   var cfg = getConfig_(), stages = cfg.stages;
   if (!(opts && opts.knockoutOnly)) {
-    var win = Number(cfg.settings.LEAGUE_POINTS_PER_WIN), loss = Number(cfg.settings.LEAGUE_POINTS_PER_LOSS);
-    var table = {}, order = [];
-    function team(name, group) {
-      var k = String(name).toLowerCase();
-      if (!table[k]) { table[k] = { group: group || '', name: name, p: 0, w: 0, l: 0 }; order.push(k); }
-      if (!table[k].group && group) table[k].group = group;
-      return table[k];
-    }
-    readTeams_().forEach(function (t) { team(t['Team Name'], t['Group']); });
-    db.objs.forEach(function (m) {
-      if (m['Stage'] !== 'Group' || m['Status'] !== STATUS.DONE || !m['Winner']) return;
-      var a = team(m['Team A'], m['Group']), b = team(m['Team B'], m['Group']);
-      var aWon = String(m['Winner']) === String(m['Team A']);
-      a.p++; b.p++;
-      if (aWon) { a.w++; b.l++; } else { b.w++; a.l++; }
+    var tables = groupTables_(db, cfg);
+    var rows = [];
+    tables.order.forEach(function (g) {
+      tables.groups[g].forEach(function (t) {
+        rows.push([t.group, t.name, t.p, t.w, t.l, t.pts, t.pf, t.pa, t.pf - t.pa, t.rank,
+                   t.tied ? 'Tied — check (same points, point diff and points scored)' : '']);
+      });
     });
-    var rows = order.map(function (k) { var t = table[k]; return [t.group, t.name, t.p, t.w, t.l, t.w * win + t.l * loss]; })
-      .sort(function (x, y) { return String(x[0]).localeCompare(String(y[0])) || y[5] - x[5] || String(x[1]).localeCompare(String(y[1])); });
     writeTable_(sheet_(TAB.STANDINGS), STANDINGS_HEADERS, rows);
+    fillSlots_(db, tables);
   }
   var ko = db.objs.filter(function (m) { return m['Stage'] !== 'Group'; }).map(function (m) {
     var r = stages[m['Stage']] || { setsToWin: 1, order: 9 };
@@ -510,6 +541,158 @@ function recompute_(db, opts) {
   }).sort(function (x, y) { return x[2] - y[2] || x[9] - y[9] || String(x[0]).localeCompare(String(y[0]), undefined, { numeric: true }); })
     .map(function (r) { return r.slice(0, 9); });
   writeTable_(sheet_(TAB.KNOCKOUT), KNOCKOUT_HEADERS, ko);
+}
+
+// "Group 1", "G1", "g 1" -> "1";  "Group A" -> "a"
+function groupKey_(g) {
+  var k = String(g || '').toLowerCase().replace(/^group\s*/, '').replace(/\s+/g, '');
+  return /^g\d+$/.test(k) ? k.slice(1) : k;
+}
+
+// Ranking: league points, then point difference, then points scored, then head-to-head.
+// Teams still level after all that are marked tied (never silently guessed).
+function groupTables_(db, cfg) {
+  var win = Number(cfg.settings.LEAGUE_POINTS_PER_WIN), loss = Number(cfg.settings.LEAGUE_POINTS_PER_LOSS);
+  var table = {}, order = [];
+  function team(name, group) {
+    var k = String(name).toLowerCase();
+    if (!table[k]) { table[k] = { group: group || '', name: String(name), p: 0, w: 0, l: 0, pf: 0, pa: 0, beat: {} }; order.push(k); }
+    if (!table[k].group && group) table[k].group = group;
+    return table[k];
+  }
+  readTeams_().forEach(function (t) { team(t['Team Name'], t['Group']); });
+  var played = {}, total = {};
+  db.objs.forEach(function (m) {
+    if (m['Stage'] !== 'Group') return;
+    var gk = groupKey_(m['Group'] || (table[String(m['Team A']).toLowerCase()] || {}).group);
+    total[gk] = (total[gk] || 0) + 1;
+    if (m['Status'] !== STATUS.DONE || !m['Winner']) return;
+    played[gk] = (played[gk] || 0) + 1;
+    var a = team(m['Team A'], m['Group']), b = team(m['Team B'], m['Group']);
+    var aWon = String(m['Winner']) === String(m['Team A']);
+    a.p++; b.p++;
+    if (aWon) { a.w++; b.l++; a.beat[b.name.toLowerCase()] = 1; } else { b.w++; a.l++; b.beat[a.name.toLowerCase()] = 1; }
+    setsOf_(m).forEach(function (s) { a.pf += s[0]; a.pa += s[1]; b.pf += s[1]; b.pa += s[0]; });
+  });
+  var groups = {}, names = {};
+  order.forEach(function (k) {
+    var t = table[k]; t.pts = t.w * win + t.l * loss;
+    var gk = groupKey_(t.group); (groups[gk] = groups[gk] || []).push(t); names[gk] = names[gk] || t.group;
+  });
+  function key(t) { return [t.pts, t.pf - t.pa, t.pf].join('|'); }
+  Object.keys(groups).forEach(function (gk) {
+    var list = groups[gk].sort(function (x, y) {
+      return y.pts - x.pts || (y.pf - y.pa) - (x.pf - x.pa) || y.pf - x.pf || x.name.localeCompare(y.name);
+    });
+    var out = [];
+    for (var i = 0; i < list.length;) {
+      var j = i; while (j < list.length && key(list[j]) === key(list[i])) j++;
+      var block = list.slice(i, j);
+      if (block.length > 1) {
+        // head-to-head among the level teams: wins against each other
+        block.forEach(function (t) { t.h2h = block.filter(function (o) { return t.beat[o.name.toLowerCase()]; }).length; });
+        block.sort(function (x, y) { return y.h2h - x.h2h || x.name.localeCompare(y.name); });
+        block.forEach(function (t) { t.tied = block.filter(function (o) { return o.h2h === t.h2h; }).length > 1 && t.p > 0; });
+      } else block[0].tied = false;
+      out = out.concat(block); i = j;
+    }
+    out.forEach(function (t, i) { t.rank = i + 1; });
+    groups[gk] = out;
+  });
+  var ord = Object.keys(groups).sort(function (a, b) { return String(names[a]).localeCompare(String(names[b]), undefined, { numeric: true }); });
+  return { groups: groups, order: ord, names: names, played: played, total: total };
+}
+
+var RANK_WORDS_ = { '1st': 1, first: 1, winner: 1, winners: 1, topper: 1, '2nd': 2, second: 2, 'runner up': 2,
+  'runners up': 2, 'runner-up': 2, 'runners-up': 2, '3rd': 3, third: 3, '4th': 4, fourth: 4, loser: 'L', losers: 'L' };
+// "G1 1st", "1st G1", "Group 2 Runner-up", "PQ1 Winner", "Winner of PQ1", "SF1 Loser" -> { ref, word }
+function parseSlot_(text) {
+  var t = String(text || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  if (!t) return null;
+  var words = Object.keys(RANK_WORDS_).sort(function (a, b) { return b.length - a.length; }).map(function (w) { return w.replace('-', '\\-'); }).join('|');
+  var m = new RegExp('^(.+?)[ ]*(?:-|:)?[ ]+(' + words + ')$').exec(t);
+  if (m) return { ref: m[1].trim(), word: m[2] };
+  m = new RegExp('^(' + words + ')[ ]+(?:of |in |from )?(.+)$').exec(t);
+  if (m) return { ref: m[2].trim(), word: m[1] };
+  return null;
+}
+
+// What a slot currently stands for: { team } when known, else { wait } / { tie } / { bad } with a reason.
+function resolveSlot_(text, db, tables) {
+  var p = parseSlot_(text); if (!p) return { bad: 'Not a slot' };
+  var rank = RANK_WORDS_[p.word];
+  var src = null;
+  db.objs.forEach(function (m) { if (String(m['Match ID']).toLowerCase() === p.ref) src = m; });
+  if (src && (rank === 1 || rank === 'L')) {
+    if (src['Status'] !== STATUS.DONE || !src['Winner']) return { wait: 'Waiting for ' + src['Match ID'] + ' to finish' };
+    var w = String(src['Winner']), other = w === String(src['Team A']) ? src['Team B'] : src['Team A'];
+    return { team: rank === 1 ? w : String(other), why: src['Match ID'] + ' ' + (rank === 1 ? 'winner' : 'loser') };
+  }
+  var gk = groupKey_(p.ref), list = tables.groups[gk];
+  if (!list || rank === 'L') return { bad: 'No match or group called "' + p.ref + '"' };
+  var total = tables.total[gk] || 0, done = tables.played[gk] || 0;
+  if (!total || done < total) return { wait: 'Group ' + (tables.names[gk] || p.ref) + ': ' + done + ' of ' + total + ' matches done' };
+  var t = list[rank - 1];
+  if (!t) return { bad: 'Group ' + tables.names[gk] + ' has only ' + list.length + ' teams' };
+  if (t.tied) return { tie: 'Tie in group ' + tables.names[gk] + ' — type the team in Manual Team' };
+  return { team: t.name, why: 'Rank ' + rank + ' in ' + tables.names[gk] + ' (' + t.pts + ' pts, diff ' + (t.pf - t.pa) + ')' };
+}
+
+// True only when the text points at a real match ID or group, so a team called "Top Gun" stays a team.
+function isSlotRef_(text, db) {
+  var p = parseSlot_(text); if (!p) return false;
+  var rank = RANK_WORDS_[p.word];
+  if ((rank === 1 || rank === 'L') && db.objs.some(function (m) { return String(m['Match ID']).toLowerCase() === p.ref; })) return true;
+  if (rank === 'L') return false;
+  if (!db._gkeys) {   // group names, worked out once per request
+    db._gkeys = {};
+    readTeams_().forEach(function (t) { db._gkeys[groupKey_(t['Group'])] = 1; });
+    db.objs.forEach(function (m) { if (m['Stage'] === 'Group') db._gkeys[groupKey_(m['Group'])] = 1; });
+  }
+  return !!db._gkeys[groupKey_(p.ref)];
+}
+
+// Slots still showing their placeholder (used to stop a match starting before its teams are known).
+function unresolvedSlots_(m, db) {
+  return ['A', 'B'].filter(function (s) {
+    var slot = String(m['Slot ' + s] || '');
+    return slot && String(m['Team ' + s]) === slot && isSlotRef_(slot, db);
+  }).map(function (s) { return m['Slot ' + s]; });
+}
+
+// Fill knockout teams from their slots and write the Qualifiers tab (keeping any Manual Team typed there).
+// Only matches that have not started are changed; a started match that disagrees is reported as a conflict.
+function fillSlots_(db, tables) {
+  var qsh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(TAB.QUALIFIERS);
+  if (!qsh) qsh = ensureTab_(SpreadsheetApp.getActiveSpreadsheet(), TAB.QUALIFIERS, QUALIFIER_HEADERS);
+  ensureHeaders_(db.sheet, MATCH_HEADERS);
+  var manual = {};
+  sheetObjects_(TAB.QUALIFIERS).forEach(function (r) {
+    if (String(r['Manual Team'] || '').trim()) manual[r['Match ID'] + '|' + r['Side']] = String(r['Manual Team']).trim();
+  });
+  var rows = [], auto = { u: 'auto' };
+  db.objs.forEach(function (m) {
+    if (m['Stage'] === 'Group') return;
+    var changed = false, old = snapshot_(m);
+    ['A', 'B'].forEach(function (s) {
+      // older sheets: adopt a placeholder already typed as the team name
+      if (!m['Slot ' + s] && m['Status'] === STATUS.SCHEDULED && isSlotRef_(m['Team ' + s], db)) { m['Slot ' + s] = String(m['Team ' + s]); changed = true; }
+      var slot = String(m['Slot ' + s] || ''); if (!slot) return;
+      var r = resolveSlot_(slot, db, tables), man = manual[m['Match ID'] + '|' + s] || '';
+      var use = man || r.team || slot, status, note = r.why || r.wait || r.tie || r.bad || '';
+      if (m['Status'] === STATUS.SCHEDULED) {
+        if (String(m['Team ' + s]) !== use) { m['Team ' + s] = use; changed = true; }
+        status = man ? 'Manual' : r.team ? 'Filled' : r.tie ? 'TIE — needs manual' : r.bad ? 'Check slot text' : 'Waiting';
+      } else if ((man || r.team) && String(m['Team ' + s]) !== use) {
+        status = 'CONFLICT'; note = 'Match already ' + m['Status'] + ' with ' + m['Team ' + s] + ', but slot now gives ' + use;
+      } else status = 'Locked (' + m['Status'] + ')';
+      rows.push([m['Match ID'], m['Stage'], s, slot, r.team || '', man, String(m['Team ' + s]), status, note]);
+    });
+    if (changed) saveMatch_(db, m, 'autoFill', old, auto);
+  });
+  var stg = getConfig_().stages;
+  rows.sort(function (x, y) { return ((stg[x[1]] || {}).order || 9) - ((stg[y[1]] || {}).order || 9) || String(x[0]).localeCompare(String(y[0]), undefined, { numeric: true }) || (x[2] < y[2] ? -1 : 1); });
+  writeTable_(qsh, QUALIFIER_HEADERS, rows);
 }
 
 // Live knockout scores: rewrite just this match's Score A / Score B / Status cells.

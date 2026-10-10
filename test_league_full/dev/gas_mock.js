@@ -5,6 +5,7 @@ function load(code) {
 function colToNum(c) { return c.split('').reduce((n, ch) => n * 26 + ch.charCodeAt(0) - 64, 0); }
 class Sheet {
   constructor(name) { this.name = name; this.data = []; }
+  getName() { return this.name; }
   getLastRow() { let n = this.data.length; while (n && this.data[n - 1].every(v => v === '' || v === undefined)) n--; return n; }
   getLastColumn() { return this.data.reduce((m, r) => Math.max(m, r.length), 0); }
   ensure(r, c) { while (this.data.length < r) this.data.push([]); for (const row of this.data) while (row.length < c) row.push(''); }
