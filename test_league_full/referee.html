@@ -160,7 +160,7 @@ h3.h { font-family: "Barlow Condensed", sans-serif; font-size: 22px; letter-spac
       <div><label>Stage</label><select id="f-stage"></select></div>
       <div><label>Status</label><select id="f-status"><option value="">All</option><option>Scheduled</option><option>Live</option><option>Done</option></select></div>
       <div style="flex:1;min-width:200px"><label>Search team / ID</label><input id="f-q" placeholder="Type to filter"></div>
-      <div style="flex:0"><button class="btn primary" id="btn-new">+ New match</button></div>
+      <div style="flex:0 0 auto;display:flex;gap:8px;white-space:nowrap"><button class="btn" id="btn-pairs" title="Pre Quarter Finals: group 1 v group 8, 2 v 7, 3 v 6, 4 v 5">1 v 8 pairings</button><button class="btn primary" id="btn-new">+ New match</button></div>
     </div>
     <div class="tablewrap"><table class="grid" id="tbl"></table></div>
   </section>
@@ -652,7 +652,12 @@ function teamSuggestions(m) {
     .forEach(function (g) { out.push(g + ' 1st', g + ' 2nd'); });
   R.matches.filter(function (x) { return x.Stage !== 'Group' && x['Match ID'] !== m['Match ID']; })
     .forEach(function (x) { out.push(x['Match ID'] + ' Winner', x['Match ID'] + ' Loser'); });
-  return out.map(function (n) { return '<option value="' + esc(n) + '">'; }).join('');
+  var nT = R.teams.length;
+  function opts(list) { return list.map(function (n) { return '<option value="' + esc(n) + '">' + esc(n) + '</option>'; }).join(''); }
+  return '<option value="">Quick pick…</option>' +
+    '<optgroup label="Group places">' + opts(out.slice(nT).filter(function (x) { return / (1st|2nd)$/.test(x); })) + '</optgroup>' +
+    '<optgroup label="Match winners / losers">' + opts(out.slice(nT).filter(function (x) { return / (Winner|Loser)$/.test(x); })) + '</optgroup>' +
+    '<optgroup label="Teams">' + opts(out.slice(0, nT)) + '</optgroup>';
 }
 
 
@@ -667,9 +672,10 @@ function editMatch(m) {
     Object.keys(groups).map(function (g) { return '<option value="' + esc(g) + '">'; }).join('') + '</datalist></div>' +
     '<div><label>Court</label><select id="e-court">' + courts + '</select></div>' +
     '<div><label>Queue order</label><input id="e-q" type="number" min="1" value="' + esc(m['Queue Order'] || '') + '" placeholder="end"></div></div>' +
-    '<label>Team A</label><input id="e-a" list="team-list" autocomplete="off" value="' + esc(m['Team A'] || '') + '">' +
-    '<label>Team B</label><input id="e-b" list="team-list" autocomplete="off" value="' + esc(m['Team B'] || '') + '">' +
-    '<datalist id="team-list">' + teamSuggestions(m) + '</datalist>' +
+    '<label>Team A — type, or use Quick pick</label><div class="row" style="gap:8px"><input id="e-a" type="text" autocomplete="off" style="flex:2" value="' + esc(m['Team A'] || '') + '">' +
+    '<select id="e-pa" style="flex:1">' + teamSuggestions(m) + '</select></div>' +
+    '<label>Team B — type, or use Quick pick</label><div class="row" style="gap:8px"><input id="e-b" type="text" autocomplete="off" style="flex:2" value="' + esc(m['Team B'] || '') + '">' +
+    '<select id="e-pb" style="flex:1">' + teamSuggestions(m) + '</select></div>' +
     '<div class="muted" style="font-size:12px;margin-top:6px">Knockout: type a slot such as <b>G1 1st</b>, <b>G8 2nd</b>, <b>PQ3 Winner</b> or <b>SF1 Loser</b> — ' +
     'the real team fills in automatically when that group / match finishes. Or pick a team to fix it.</div>' +
     (R.teams.length ? '' : '<div class="err-text">No teams yet — add them under Teams &amp; links first.</div>'),
@@ -682,8 +688,24 @@ function editMatch(m) {
       return ref('assignMatch', { match: { matchId: m['Match ID'] || $('#e-id').value.trim(), stage: $('#e-stage').value, group: $('#e-group').value.trim(),
         court: $('#e-court').value, queueOrder: $('#e-q').value, teamA: a, teamB: b } }).then(function (r) { toast('Saved ' + r.match['Match ID']); });
     } }]);
+  ['a', 'b'].forEach(function (k) {
+    var pick = $('#e-p' + k); if (!pick) return;
+    pick.onchange = function () { if (pick.value) { $('#e-' + k).value = pick.value; pick.value = ''; } };
+  });
 }
 $('#btn-new').onclick = function () { editMatch(null); };
+// One click: knockout slots set to the standard draw (G1 v G8, G2 v G7, …). Shows the plan first.
+$('#btn-pairs').onclick = function () {
+  ref('standardPairings', { dryRun: true }).then(function (r) {
+    modal('Set 1 v 8 pairings?', '<div class="muted" style="margin-bottom:8px">1st of each group plays 2nd of the paired group (1 v 8, 2 v 7, 3 v 6, 4 v 5). ' +
+      'Quarter / semi finals are set so teams from the same group can only meet in the Final. Real teams fill in when the groups finish.</div>' +
+      '<div style="font-family:monospace;font-size:13px;line-height:1.6">' + r.changed.map(esc).join('<br>') + '</div>' +
+      (r.skipped.length ? '<div class="err-text" style="margin-top:8px">Not changed (already started): ' + esc(r.skipped.join(', ')) + '</div>' : ''),
+      [{ label: 'Cancel', cls: 'ghost' }, { label: 'Set pairings', cls: 'primary', fn: function () {
+        return ref('standardPairings', {}).then(function (x) { toast(x.changed.length + ' matches updated'); return refresh && refresh(); });
+      } }]);
+  }).catch(function (e) { toast(e.message, true); });
+};
 
 function moveCourt(m) {
   var courts = ''; for (var c = 1; c <= courtCount(); c++) courts += '<option' + (+m.Court === c ? ' selected' : '') + '>' + c + '</option>';

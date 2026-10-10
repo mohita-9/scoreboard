@@ -232,7 +232,7 @@ function doPost(e) {
 var UMPIRE_ACTIONS = { startMatch: startMatch_, setScore: setScore_, endMatch: endMatch_ };
 var REFEREE_ACTIONS = { assignMatch: assignMatch_, bulkAdd: bulkAdd_, addTeams: addTeams_, removeTeam: removeTeam_,
   reassignCourt: reassignCourt_, reorderQueue: reorderQueue_, overrideScore: overrideScore_,
-  unlockMatch: unlockMatch_, deleteMatch: deleteMatch_ };
+  unlockMatch: unlockMatch_, deleteMatch: deleteMatch_, standardPairings: standardPairings_ };
 
 function handle_(b) {
   if (b.action === 'login') return login_(b);
@@ -417,6 +417,46 @@ function upsertMatch_(db, d, tok, isBulk) {
   if (existing) saveMatch_(db, m, 'assignMatch (edit)', old, tok);
   else appendMatch_(db, m, 'assignMatch (new)', tok);
   return m;
+}
+
+// Standard draw for 2N groups: group 1 v group 2N, 2 v 2N-1, … (1st of one group plays 2nd of the other, both ways).
+// Bracket halves keep the 1st and 2nd of the same group apart until the Final:
+//   PQ1 G1 1st v G8 2nd · PQ2 G8 1st v G1 2nd · PQ3 G2 1st v G7 2nd · PQ4 G7 1st v G2 2nd · … PQ8 G5 1st v G4 2nd
+//   QF1 PQ1 v PQ3 · QF2 PQ2 v PQ4 · QF3 PQ5 v PQ7 · QF4 PQ6 v PQ8 · SF1 QF1 v QF3 · SF2 QF2 v QF4 · Final SF1 v SF2
+// Only matches that have not started are changed. dryRun:true returns the plan without saving.
+function standardPairings_(b, tok) {
+  var db = readMatches_(), byNum = function (x, y) { return String(x['Match ID']).localeCompare(String(y['Match ID']), undefined, { numeric: true }); };
+  var groups = {};
+  readTeams_().forEach(function (t) { if (t['Group']) groups[t['Group']] = 1; });
+  groups = Object.keys(groups).sort(function (x, y) { return x.localeCompare(y, undefined, { numeric: true }); });
+  var stage = function (n) { return db.objs.filter(function (m) { return m['Stage'] === n; }).sort(byNum); };
+  var pq = stage('Pre Quarter Final'), qf = stage('Quarter Final'), sf = stage('Semi Final'), fi = stage('Final');
+  var n = groups.length;
+  if (n < 2 || n % 2) throw err_('INVALID', 'Needs an even number of groups (found ' + n + ')');
+  if (pq.length !== n) throw err_('INVALID', 'Needs ' + n + ' Pre Quarter Final matches for ' + n + ' groups (found ' + pq.length + ')');
+  var plan = [];
+  for (var i = 0; i < n / 2; i++) {
+    var g1 = groups[i], g2 = groups[n - 1 - i];
+    plan.push([pq[2 * i], g1 + ' 1st', g2 + ' 2nd'], [pq[2 * i + 1], g2 + ' 1st', g1 + ' 2nd']);
+  }
+  var W = function (m) { return m['Match ID'] + ' Winner'; };
+  if (n === 8 && qf.length === 4) {
+    plan.push([qf[0], W(pq[0]), W(pq[2])], [qf[1], W(pq[1]), W(pq[3])], [qf[2], W(pq[4]), W(pq[6])], [qf[3], W(pq[5]), W(pq[7])]);
+    if (sf.length === 2) plan.push([sf[0], W(qf[0]), W(qf[2])], [sf[1], W(qf[1]), W(qf[3])]);
+    if (sf.length === 2 && fi.length === 1) plan.push([fi[0], W(sf[0]), W(sf[1])]);
+  }
+  var changed = [], skipped = [];
+  plan.forEach(function (p) {
+    var m = p[0];
+    if (m['Status'] !== STATUS.SCHEDULED) { skipped.push(m['Match ID'] + ' (' + m['Status'] + ')'); return; }
+    if (b.dryRun) { changed.push(m['Match ID'] + ': ' + p[1] + ' v ' + p[2]); return; }
+    var old = snapshot_(m);
+    m['Team A'] = m['Slot A'] = p[1]; m['Team B'] = m['Slot B'] = p[2];
+    saveMatch_(db, m, 'standardPairings', old, tok);
+    changed.push(m['Match ID'] + ': ' + p[1] + ' v ' + p[2]);
+  });
+  if (!b.dryRun) recompute_(db);
+  return { ok: true, changed: changed, skipped: skipped };
 }
 
 function addTeams_(b, tok) {
