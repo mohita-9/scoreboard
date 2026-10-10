@@ -184,11 +184,12 @@ function onOpen() {
     .addItem('Update standings & knockout now', 'refreshCaches')
     .addToUi();
 }
+// Manual Team typed into the Qualifiers tab takes effect straight away.
 function onEdit(e) {
   try {
-    var sh = e && e.range && e.range.getSheet();
-    if (!sh || sh.getName() !== TAB.QUALIFIERS || e.range.getRow() < 2) return;
-    if (e.range.getColumn() <= 6 && e.range.getLastColumn() >= 6) withLock_(function () { recompute_(); clearCaches_(); });
+    var r = e && e.range, sh = r && r.getSheet();
+    if (!sh || sh.getName() !== TAB.QUALIFIERS || r.getRow() < 2) return;
+    if (r.getColumn() <= 6 && r.getLastColumn() >= 6) withLock_(function () { recompute_(); clearCaches_(); });
   } catch (err) { /* never block the person editing */ }
 }
 

@@ -216,9 +216,11 @@ h3.h { font-family: "Barlow Condensed", sans-serif; font-size: 22px; letter-spac
 </div></div>
 <div class="toast" id="toast"></div>
 
+<script src="league-config.js"></script>
 <script>
 // ===== CONFIGURE: your Apps Script web app URL (ends in /exec) =====
-const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxpFMGoyn6GmQFqfc5n-0-xJDhC0WuBfmUrGNqaw3VTBxJm5tFFGPk9kzi0z6q_FdhJOA/exec";
+// The web app link is set ONCE in league-config.js (shared by every page). The text below is only a fallback.
+const APPS_SCRIPT_URL = window.LEAGUE_URL || "PASTE_YOUR_WEB_APP_URL_HERE";
 // ==================================================================
 
 /* ==== SHARED SCORING RULES (identical copy on server and every page) ==== */
@@ -345,7 +347,9 @@ function store(key, val) {
 // League config: stage rules + branding. Cached so pages still open offline.
 // Google's server sometimes drops a request (cold start, many phones at once), so retry a few
 // times with a short, slightly random wait before giving up. onRetry(n) lets the page say "connecting".
+function urlIsSet() { return /^https:\/\/script\.google\.com\/macros\/s\/[^/]+\/exec$/.test(Api.base()); }
 function loadConfig(onRetry) {
+  if (!urlIsSet()) return Promise.reject(new Error('NO_URL'));
   // A phone that has opened the page before has a saved copy: if the first try fails, use it at once
   // (an umpire mid-match must never wait); only a first-time phone needs the retries.
   var waits = store('league_cfg') ? [] : [800, 1500, 2500, 4000, 6000];
@@ -386,10 +390,18 @@ function showOffline(boot) {
   var secs = 10, t, o = offlineBox();
   o.innerHTML = '<div class="card" style="max-width:420px;text-align:center">' +
     '<div style="font-weight:600;margin-bottom:6px">Can’t reach the league server</div>' +
-    '<div style="color:var(--text-sub);font-size:14px">Check the internet connection. Retrying in <span id="off-s">' + secs + '</span>s…</div>' +
-    '<button class="btn" id="off-retry" style="margin-top:14px">Try again now</button></div>';
-  function go() { clearInterval(t); connecting(0); boot(); }
+    (urlIsSet()
+      ? '<div style="color:var(--text-sub);font-size:14px">Check the internet connection. Retrying in <span id="off-s">' + secs + '</span>s…</div>' +
+        '<button class="btn" id="off-retry" style="margin-top:14px">Try again now</button>' +
+        '<div style="color:var(--text-sub);font-size:12px;margin-top:14px;line-height:1.45;word-break:break-all">Using: ' + esc(Api.base()) +
+        '<br><a href="' + esc(Api.base()) + '?view=config" target="_blank" rel="noopener" style="color:var(--cyan)">Test this link</a> — it should show text starting <b>{"stages"</b>. ' +
+        'A Google sign-in or error page means the web app is not deployed with access “Anyone”, or this is an old link.</div>'
+      : '<div style="color:var(--text-sub);font-size:14px;line-height:1.45">This page has no web app link yet.<br>Put the link in <b>league-config.js</b> ' +
+        '(Apps Script → Deploy → Manage deployments → Web app URL), upload it next to this page and reload.</div>' +
+        '<button class="btn" id="off-retry" style="margin-top:14px">Reload</button>') + '</div>';
+  function go() { clearInterval(t); if (!urlIsSet()) return location.reload(); connecting(0); boot(); }
   document.getElementById('off-retry').onclick = go;
+  if (!urlIsSet()) return;
   t = setInterval(function () { secs--; var s = document.getElementById('off-s'); if (s) s.textContent = secs; if (secs <= 0) go(); }, 1000);
 }
 
@@ -627,13 +639,22 @@ function teamCell(m, s) {
   return slot === team ? '<span class="muted">' + esc(team) + '</span>' : esc(team) + '<div class="muted" style="font-size:11px">from ' + esc(slot) + '</div>';
 }
 
-function teamOptions(selected, slot) {
-  var names = R.teams.map(function (t) { return t['Team Name']; });
-  if (selected && names.indexOf(selected) < 0) names.unshift(selected);
-  // knockout: the slot ("G1 1st", "PQ1 Winner") is offered too, so a pinned team can go back to automatic
-  if (slot && names.indexOf(slot) < 0) names.unshift(slot);
-  return '<option value="">— choose —</option>' + names.map(function (n) { return '<option' + (n === selected ? ' selected' : '') + '>' + esc(n) + '</option>'; }).join('');
+function isTeam(t) { t = t.toLowerCase(); return R.teams.some(function (x) { return x['Team Name'].toLowerCase() === t; }); }
+function looksLikeSlot(t) {
+  return /^.+\s+(1st|2nd|3rd|4th|first|second|third|fourth|winners?|topper|runners?[\s-]?up|losers?)$/i.test(t) ||
+         /^(1st|2nd|3rd|4th|first|second|third|fourth|winners?|topper|runners?[\s-]?up|losers?)\s+(of\s+|in\s+|from\s+)?.+$/i.test(t);
 }
+// suggestions for the Team boxes: every team, then knockout slots (group places and match winners/losers)
+function teamSuggestions(m) {
+  var out = R.teams.map(function (t) { return t['Team Name']; }), groups = {};
+  R.teams.forEach(function (t) { if (t.Group) groups[t.Group] = 1; });
+  Object.keys(groups).sort(function (x, y) { return x.localeCompare(y, undefined, { numeric: true }); })
+    .forEach(function (g) { out.push(g + ' 1st', g + ' 2nd'); });
+  R.matches.filter(function (x) { return x.Stage !== 'Group' && x['Match ID'] !== m['Match ID']; })
+    .forEach(function (x) { out.push(x['Match ID'] + ' Winner', x['Match ID'] + ' Loser'); });
+  return out.map(function (n) { return '<option value="' + esc(n) + '">'; }).join('');
+}
+
 
 function editMatch(m) {
   m = m || {};
@@ -646,13 +667,18 @@ function editMatch(m) {
     Object.keys(groups).map(function (g) { return '<option value="' + esc(g) + '">'; }).join('') + '</datalist></div>' +
     '<div><label>Court</label><select id="e-court">' + courts + '</select></div>' +
     '<div><label>Queue order</label><input id="e-q" type="number" min="1" value="' + esc(m['Queue Order'] || '') + '" placeholder="end"></div></div>' +
-    '<label>Team A</label><select id="e-a">' + teamOptions(m['Team A'], m['Slot A']) + '</select>' +
-    '<label>Team B</label><select id="e-b">' + teamOptions(m['Team B'], m['Slot B']) + '</select>' +
+    '<label>Team A</label><input id="e-a" list="team-list" autocomplete="off" value="' + esc(m['Team A'] || '') + '">' +
+    '<label>Team B</label><input id="e-b" list="team-list" autocomplete="off" value="' + esc(m['Team B'] || '') + '">' +
+    '<datalist id="team-list">' + teamSuggestions(m) + '</datalist>' +
+    '<div class="muted" style="font-size:12px;margin-top:6px">Knockout: type a slot such as <b>G1 1st</b>, <b>G8 2nd</b>, <b>PQ3 Winner</b> or <b>SF1 Loser</b> — ' +
+    'the real team fills in automatically when that group / match finishes. Or pick a team to fix it.</div>' +
     (R.teams.length ? '' : '<div class="err-text">No teams yet — add them under Teams &amp; links first.</div>'),
     [{ label: 'Cancel', cls: 'ghost' }, { label: 'Save', cls: 'primary', fn: function () {
-      var a = $('#e-a').value, b = $('#e-b').value;
-      if (!a || !b) return Promise.reject(new Error('Choose both teams'));
-      if (a === b) return Promise.reject(new Error('Team A and Team B cannot be the same'));
+      var a = $('#e-a').value.trim(), b = $('#e-b').value.trim(), stage = $('#e-stage').value;
+      if (!a || !b) return Promise.reject(new Error('Enter both teams'));
+      if (a.toLowerCase() === b.toLowerCase()) return Promise.reject(new Error('Team A and Team B cannot be the same'));
+      var bad = [a, b].filter(function (t) { return !isTeam(t) && (stage === 'Group' || !looksLikeSlot(t)); });
+      if (bad.length) return Promise.reject(new Error('"' + bad[0] + '" is not a team' + (stage === 'Group' ? '' : ' or a slot like "G1 1st" / "PQ1 Winner"')));
       return ref('assignMatch', { match: { matchId: m['Match ID'] || $('#e-id').value.trim(), stage: $('#e-stage').value, group: $('#e-group').value.trim(),
         court: $('#e-court').value, queueOrder: $('#e-q').value, teamA: a, teamB: b } }).then(function (r) { toast('Saved ' + r.match['Match ID']); });
     } }]);

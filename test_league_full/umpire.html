@@ -245,9 +245,11 @@ h2.sec::after { content: ""; flex: 1; height: 1px; background: linear-gradient(9
 </div></div>
 <div class="toast" id="toast"></div>
 
+<script src="league-config.js"></script>
 <script>
 // ===== CONFIGURE: your Apps Script web app URL (ends in /exec) =====
-const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxpFMGoyn6GmQFqfc5n-0-xJDhC0WuBfmUrGNqaw3VTBxJm5tFFGPk9kzi0z6q_FdhJOA/exec";
+// The web app link is set ONCE in league-config.js (shared by every page). The text below is only a fallback.
+const APPS_SCRIPT_URL = window.LEAGUE_URL || "PASTE_YOUR_WEB_APP_URL_HERE";
 // ==================================================================
 
 /* ==== SHARED SCORING RULES (identical copy on server and every page) ==== */
@@ -374,7 +376,9 @@ function store(key, val) {
 // League config: stage rules + branding. Cached so pages still open offline.
 // Google's server sometimes drops a request (cold start, many phones at once), so retry a few
 // times with a short, slightly random wait before giving up. onRetry(n) lets the page say "connecting".
+function urlIsSet() { return /^https:\/\/script\.google\.com\/macros\/s\/[^/]+\/exec$/.test(Api.base()); }
 function loadConfig(onRetry) {
+  if (!urlIsSet()) return Promise.reject(new Error('NO_URL'));
   // A phone that has opened the page before has a saved copy: if the first try fails, use it at once
   // (an umpire mid-match must never wait); only a first-time phone needs the retries.
   var waits = store('league_cfg') ? [] : [800, 1500, 2500, 4000, 6000];
@@ -415,10 +419,18 @@ function showOffline(boot) {
   var secs = 10, t, o = offlineBox();
   o.innerHTML = '<div class="card" style="max-width:420px;text-align:center">' +
     '<div style="font-weight:600;margin-bottom:6px">Can’t reach the league server</div>' +
-    '<div style="color:var(--text-sub);font-size:14px">Check the internet connection. Retrying in <span id="off-s">' + secs + '</span>s…</div>' +
-    '<button class="btn" id="off-retry" style="margin-top:14px">Try again now</button></div>';
-  function go() { clearInterval(t); connecting(0); boot(); }
+    (urlIsSet()
+      ? '<div style="color:var(--text-sub);font-size:14px">Check the internet connection. Retrying in <span id="off-s">' + secs + '</span>s…</div>' +
+        '<button class="btn" id="off-retry" style="margin-top:14px">Try again now</button>' +
+        '<div style="color:var(--text-sub);font-size:12px;margin-top:14px;line-height:1.45;word-break:break-all">Using: ' + esc(Api.base()) +
+        '<br><a href="' + esc(Api.base()) + '?view=config" target="_blank" rel="noopener" style="color:var(--cyan)">Test this link</a> — it should show text starting <b>{"stages"</b>. ' +
+        'A Google sign-in or error page means the web app is not deployed with access “Anyone”, or this is an old link.</div>'
+      : '<div style="color:var(--text-sub);font-size:14px;line-height:1.45">This page has no web app link yet.<br>Put the link in <b>league-config.js</b> ' +
+        '(Apps Script → Deploy → Manage deployments → Web app URL), upload it next to this page and reload.</div>' +
+        '<button class="btn" id="off-retry" style="margin-top:14px">Reload</button>') + '</div>';
+  function go() { clearInterval(t); if (!urlIsSet()) return location.reload(); connecting(0); boot(); }
   document.getElementById('off-retry').onclick = go;
+  if (!urlIsSet()) return;
   t = setInterval(function () { secs--; var s = document.getElementById('off-s'); if (s) s.textContent = secs; if (secs <= 0) go(); }, 1000);
 }
 

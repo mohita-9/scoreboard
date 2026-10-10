@@ -330,6 +330,7 @@ body { min-height: 100vh; }
 .team-score { flex: 0 0 auto; }
 .champion-name { overflow-wrap: anywhere; max-width: 100%; }
 </style>
+<script src="league-config.js"></script>
 </head>
 <body>
 
@@ -396,7 +397,8 @@ body { min-height: 100vh; }
 </div>
 
 <script>
-  const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz_54_l9Ra3EVcKLt3sA4iCeVqHR9767yhS_60L7El_9qk46nPYAg-j3M_of7NTfKAH/exec?sheet=Knockout";
+  // league-config v3: the link comes from league-config.js (shared by all pages); the one here is a fallback
+  const APPS_SCRIPT_URL = (window.LEAGUE_URL ? String(window.LEAGUE_URL).split("?")[0] : "https://script.google.com/macros/s/AKfycbz_54_l9Ra3EVcKLt3sA4iCeVqHR9767yhS_60L7El_9qk46nPYAg-j3M_of7NTfKAH/exec") + "?sheet=Knockout";
   const POLL_MS = 8000;
   let lastGoodData = null;
 
