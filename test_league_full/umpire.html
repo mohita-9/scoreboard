@@ -229,7 +229,7 @@ h2.sec::after { content: ""; flex: 1; height: 1px; background: linear-gradient(9
 
 <script>
 // ===== CONFIGURE: your Apps Script web app URL (ends in /exec) =====
-const APPS_SCRIPT_URL = "PASTE_YOUR_WEB_APP_URL_HERE";
+const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxgQbe1xVTKXKd8D4l86j2IIhuyKSexp9OQPmc7_yqVFGPTH1SQJSZFdy-dhaADSSnWpA/exec";
 // ==================================================================
 
 /* ==== SHARED SCORING RULES (identical copy on server and every page) ==== */
@@ -324,16 +324,27 @@ var Api = {
   base: function () { return String(APPS_SCRIPT_URL).split('?')[0]; },
   get: function (params) {
     var q = Object.keys(params).map(function (k) { return k + '=' + encodeURIComponent(params[k]); }).join('&');
-    return fetch(Api.base() + '?' + q + '&t=' + Date.now(), { cache: 'no-store' }).then(function (r) {
+    // give up on a hung request after 20s so the caller can retry
+    var ctl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    var timer = ctl ? setTimeout(function () { ctl.abort(); }, 20000) : null;
+    return fetch(Api.base() + '?' + q + '&t=' + Date.now(), { cache: 'no-store', signal: ctl ? ctl.signal : undefined }).then(function (r) {
       if (!r.ok) throw new Error('HTTP ' + r.status);
       return r.json();
-    });
+    }).then(function (d) { clearTimeout(timer); return d; }, function (e) { clearTimeout(timer); throw e; });
   },
   // text/plain keeps this a "simple" request: no CORS preflight to Apps Script
   post: function (body) {
     return fetch(Api.base(), { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(body) })
       .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); },
             function (e) { var x = new Error('Network error'); x.network = true; throw x; });
+  },
+  // for safe-to-repeat calls (login): retry dropped requests twice before reporting "no connection"
+  postRetry: function (body, tries) {
+    tries = tries === undefined ? 2 : tries;
+    return Api.post(body).catch(function (e) {
+      if (!tries) throw e;
+      return new Promise(function (r) { setTimeout(r, 1200); }).then(function () { return Api.postRetry(body, tries - 1); });
+    });
   }
 };
 
@@ -343,13 +354,54 @@ function store(key, val) {
 }
 
 // League config: stage rules + branding. Cached so pages still open offline.
-function loadConfig() {
-  return Api.get({ view: 'config' }).then(function (cfg) {
-    if (!cfg || !cfg.stages) throw new Error('bad config');
-    store('league_cfg', cfg); applyBranding(cfg); return cfg;
-  }).catch(function (e) {
-    var c = store('league_cfg'); if (c) { applyBranding(c); return c; } throw e;
-  });
+// Google's server sometimes drops a request (cold start, many phones at once), so retry a few
+// times with a short, slightly random wait before giving up. onRetry(n) lets the page say "connecting".
+function loadConfig(onRetry) {
+  // A phone that has opened the page before has a saved copy: if the first try fails, use it at once
+  // (an umpire mid-match must never wait); only a first-time phone needs the retries.
+  var waits = store('league_cfg') ? [] : [800, 1500, 2500, 4000, 6000];
+  function attempt(n) {
+    return Api.get({ view: 'config' }).then(function (cfg) {
+      if (!cfg || !cfg.stages) throw new Error('bad config');
+      store('league_cfg', cfg); applyBranding(cfg); return cfg;
+    }).catch(function (e) {
+      if (n < waits.length) {
+        if (onRetry) onRetry(n + 1);
+        return new Promise(function (res) { setTimeout(res, waits[n] * (0.75 + Math.random() * 0.5)); })
+          .then(function () { return attempt(n + 1); });
+      }
+      var c = store('league_cfg'); if (c) { applyBranding(c); return c; } throw e;
+    });
+  }
+  return attempt(0);
+}
+
+// Shown in place of the page when the server can't be reached even after retries.
+// Keeps trying in the background and has a button, so nobody is stuck on a dead screen.
+// It's an overlay, so the page underneath stays intact; call hideOffline() once boot succeeds.
+function offlineBox() {
+  var o = document.getElementById('offline');
+  if (!o) {
+    o = document.createElement('div'); o.id = 'offline';
+    o.style.cssText = 'position:fixed;inset:0;z-index:999;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(7,6,12,.92)';
+    document.body.appendChild(o);
+  }
+  return o;
+}
+function connecting(n) {
+  offlineBox().innerHTML = '<div class="card" style="max-width:420px;text-align:center">Connecting to the league server…' +
+    (n ? '<div style="color:var(--text-sub);font-size:13px;margin-top:6px">Attempt ' + (n + 1) + '</div>' : '') + '</div>';
+}
+function hideOffline() { var o = document.getElementById('offline'); if (o) o.remove(); }
+function showOffline(boot) {
+  var secs = 10, t, o = offlineBox();
+  o.innerHTML = '<div class="card" style="max-width:420px;text-align:center">' +
+    '<div style="font-weight:600;margin-bottom:6px">Can’t reach the league server</div>' +
+    '<div style="color:var(--text-sub);font-size:14px">Check the internet connection. Retrying in <span id="off-s">' + secs + '</span>s…</div>' +
+    '<button class="btn" id="off-retry" style="margin-top:14px">Try again now</button></div>';
+  function go() { clearInterval(t); connecting(0); boot(); }
+  document.getElementById('off-retry').onclick = go;
+  t = setInterval(function () { secs--; var s = document.getElementById('off-s'); if (s) s.textContent = secs; if (secs <= 0) go(); }, 1000);
 }
 
 function hexToRgba(hex, a) {
@@ -457,7 +509,7 @@ $('#btn-login').onclick = function () {
   if (!name) { errBox.textContent = 'Enter your name'; return; }
   if (!pin) { errBox.textContent = 'Enter the court PIN'; return; }
   var btn = this; btn.disabled = true; btn.textContent = 'Checking…';
-  Api.post({ action: 'login', role: 'umpire', court: court, pin: pin, umpire: name }).then(function (r) {
+  Api.postRetry({ action: 'login', role: 'umpire', court: court, pin: pin, umpire: name }).then(function (r) {
     if (!r.ok) { errBox.textContent = r.message || r.error; return; }
     S.auth = { token: r.token, court: String(r.court), umpire: r.umpire, expires: r.expires };
     store('ump_auth', S.auth); store('ump_last', { name: name, court: court });
@@ -890,13 +942,15 @@ window.addEventListener('offline', function () { if (S.queue.length) setSync(tru
 window.addEventListener('beforeunload', function (e) { if (S.queue.length) { e.preventDefault(); e.returnValue = ''; } });
 
 /* ---------- start ---------- */
-loadConfig().then(function (cfg) {
-  S.cfg = cfg;
-  if (S.auth && S.auth.expires && S.auth.expires < Date.now()) { S.auth = null; store('ump_auth', null); }
-  if (S.auth) afterLogin(); else renderLogin();
-}).catch(function () {
-  document.querySelector('main').innerHTML = '<div class="card" style="margin-top:20px">Cannot reach the league server. Check the internet connection and that APPS_SCRIPT_URL is set, then reload.</div>';
-});
+function boot() {
+  loadConfig(connecting).then(function (cfg) {
+    hideOffline();
+    S.cfg = cfg;
+    if (S.auth && S.auth.expires && S.auth.expires < Date.now()) { S.auth = null; store('ump_auth', null); }
+    if (S.auth) afterLogin(); else renderLogin();
+  }, function () { showOffline(boot); });
+}
+boot();
 </script>
 </body>
 </html>

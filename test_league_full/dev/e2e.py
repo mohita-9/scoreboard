@@ -33,10 +33,14 @@ def api(body=None, **params):
     return json.loads(urllib.request.urlopen(req).read())
 
 OFFLINE = {"on": False}
+FAILCFG = {"n": 0}   # drop the next n ?view=config requests (Google hiccup)
 def route(route):
     if OFFLINE["on"]:
         return route.abort()
     req = route.request
+    if "view=config" in req.url and FAILCFG["n"] > 0:
+        FAILCFG["n"] -= 1
+        return route.abort()
     url = req.url.replace(FAKE, API)
     data = req.post_data.encode() if req.post_data else None
     r = urllib.request.urlopen(urllib.request.Request(url, data=data, headers={"Content-Type": "text/plain"}))
@@ -211,6 +215,21 @@ try:
 
         # branding change applies to every page
         sh = api(view="config")
+        # ---------- flaky server on first open ----------
+        fctx = b.new_context(viewport={"width": 390, "height": 844}); fctx.route("**/script.google.com/**", route)
+        FAILCFG["n"] = 3
+        fu = fctx.new_page(); watch(fu, "umpire-flaky")
+        fu.goto("http://127.0.0.1:8080/umpire.html"); fu.wait_for_timeout(9000)
+        check("umpire recovers after 3 dropped requests", fu.locator("#btn-login").is_visible() and fu.locator("#offline").count() == 0)
+        FAILCFG["n"] = 99
+        fctx2 = b.new_context(viewport={"width": 390, "height": 844}); fctx2.route("**/script.google.com/**", route)
+        fr = fctx2.new_page(); watch(fr, "referee-down")
+        fr.goto("http://127.0.0.1:8080/referee.html"); fr.wait_for_timeout(22000)
+        check("referee shows retry screen when server down", fr.locator("#off-retry").is_visible())
+        FAILCFG["n"] = 0
+        fr.click("#off-retry"); fr.wait_for_timeout(2500)
+        check("referee recovers via Try again", fr.locator("#offline").count() == 0 and fr.locator("#btn-login").is_visible())
+
         check("errors in pages: " + "; ".join(errors[:5]), not errors)
         b.close()
 finally:

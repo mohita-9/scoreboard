@@ -199,7 +199,7 @@ $all('.tab').forEach(function (b) { b.onclick = function () { setTab(b.getAttrib
 /* ---------- auth ---------- */
 $('#btn-login').onclick = function () {
   var pin = $('#in-pin').value.trim(), err = $('#login-err'); err.textContent = '';
-  Api.post({ action: 'login', role: 'referee', pin: pin }).then(function (r) {
+  Api.postRetry({ action: 'login', role: 'referee', pin: pin }).then(function (r) {
     if (!r.ok) { err.textContent = r.message || r.error; return; }
     R.auth = { token: r.token, expires: r.expires }; store('ref_auth', R.auth); $('#in-pin').value = ''; start();
   }).catch(function () { err.textContent = 'No connection'; });
@@ -508,12 +508,14 @@ $('#links-tbl').addEventListener('click', function (e) {
 $('#btn-print').onclick = function () { if (!$('#links-tbl').innerHTML) $('#btn-gen').click(); setTimeout(function () { window.print(); }, 300); };
 
 /* ---------- boot ---------- */
-loadConfig().then(function (cfg) {
-  R.cfg = cfg;
-  if (R.auth && R.auth.expires > Date.now()) start(); else logout();
-}).catch(function () {
-  document.querySelector('main').innerHTML = '<div class="card" style="margin:40px auto;max-width:520px">Cannot reach the league server. Check that APPS_SCRIPT_URL is set and the web app is deployed with access “Anyone”.</div>';
-});
+function boot() {
+  loadConfig(connecting).then(function (cfg) {
+    hideOffline();
+    R.cfg = cfg;
+    if (R.auth && R.auth.expires > Date.now()) start(); else logout();
+  }, function () { showOffline(boot); });
+}
+boot();
 </script>
 </body>
 </html>

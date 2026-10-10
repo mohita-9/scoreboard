@@ -217,7 +217,7 @@ $('#btn-login').onclick = function () {
   if (!name) { errBox.textContent = 'Enter your name'; return; }
   if (!pin) { errBox.textContent = 'Enter the court PIN'; return; }
   var btn = this; btn.disabled = true; btn.textContent = 'Checking…';
-  Api.post({ action: 'login', role: 'umpire', court: court, pin: pin, umpire: name }).then(function (r) {
+  Api.postRetry({ action: 'login', role: 'umpire', court: court, pin: pin, umpire: name }).then(function (r) {
     if (!r.ok) { errBox.textContent = r.message || r.error; return; }
     S.auth = { token: r.token, court: String(r.court), umpire: r.umpire, expires: r.expires };
     store('ump_auth', S.auth); store('ump_last', { name: name, court: court });
@@ -650,13 +650,15 @@ window.addEventListener('offline', function () { if (S.queue.length) setSync(tru
 window.addEventListener('beforeunload', function (e) { if (S.queue.length) { e.preventDefault(); e.returnValue = ''; } });
 
 /* ---------- start ---------- */
-loadConfig().then(function (cfg) {
-  S.cfg = cfg;
-  if (S.auth && S.auth.expires && S.auth.expires < Date.now()) { S.auth = null; store('ump_auth', null); }
-  if (S.auth) afterLogin(); else renderLogin();
-}).catch(function () {
-  document.querySelector('main').innerHTML = '<div class="card" style="margin-top:20px">Cannot reach the league server. Check the internet connection and that APPS_SCRIPT_URL is set, then reload.</div>';
-});
+function boot() {
+  loadConfig(connecting).then(function (cfg) {
+    hideOffline();
+    S.cfg = cfg;
+    if (S.auth && S.auth.expires && S.auth.expires < Date.now()) { S.auth = null; store('ump_auth', null); }
+    if (S.auth) afterLogin(); else renderLogin();
+  }, function () { showOffline(boot); });
+}
+boot();
 </script>
 </body>
 </html>

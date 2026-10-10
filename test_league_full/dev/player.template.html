@@ -169,18 +169,20 @@ function schedule() {
 }
 document.addEventListener('visibilitychange', function () { if (!document.hidden && P.cfg) refresh(); });
 
-loadConfig().then(function (cfg) {
-  P.cfg = cfg;
-  var q = new URLSearchParams(location.search).get('team');
-  P.team = q || store('player_team');
-  if (P.team) $('#team-in').value = P.team;
-  return refresh();
-}).then(function () {
-  if (P.team) choose(P.team);
-  schedule();
-}).catch(function () {
-  $('#content').innerHTML = '<div class="card" style="margin-top:16px">Cannot reach the league server right now. Please try again in a moment.</div>';
-});
+function boot() {
+  loadConfig(connecting).then(function (cfg) {
+    hideOffline();
+    P.cfg = cfg;
+    var q = new URLSearchParams(location.search).get('team');
+    P.team = q || store('player_team');
+    if (P.team) $('#team-in').value = P.team;
+    return refresh().then(function () {
+      if (P.team) choose(P.team);
+      schedule();   // schedule() keeps retrying with backoff if refresh failed
+    });
+  }, function () { showOffline(boot); });
+}
+boot();
 </script>
 </body>
 </html>
