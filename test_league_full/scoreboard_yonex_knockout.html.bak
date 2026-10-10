@@ -407,24 +407,24 @@ h1 {
     card.className = "match-card status-" + status + (isFinal ? " final-card" : "");
     card.innerHTML =
       "<div class='match-header'>" +
-        "<span class='match-num'>Match " + esc(matchNo) + "</span>" +
+        "<span class='match-num'>Match " + matchNo + "</span>" +
         "<span class='match-status'>" + statusTxt + "</span>" +
       "</div>" +
       "<div class='match-body'>" +
         "<div class='team-row'>" +
           "<span class='team-name" + (isWinA ? " winner" : "") + "'>" +
-            (teamA === "TBD" ? "<span class='tbd'>TBD</span>" : esc(teamA)) +
+            (teamA === "TBD" ? "<span class='tbd'>TBD</span>" : teamA) +
             (isWinA ? "<span class='winner-badge'>✦ Winner</span>" : "") +
           "</span>" +
-          (showSc ? "<span class='team-score" + (isWinA ? " winner-score" : status==="done" ? " loser-score" : "") + "'>" + esc(scoreA) + "</span>" : "") +
+          (showSc ? "<span class='team-score" + (isWinA ? " winner-score" : status==="done" ? " loser-score" : "") + "'>" + scoreA + "</span>" : "") +
         "</div>" +
         "<div class='vs-divider'>VS</div>" +
         "<div class='team-row'>" +
           "<span class='team-name" + (isWinB ? " winner" : "") + "'>" +
-            (teamB === "TBD" ? "<span class='tbd'>TBD</span>" : esc(teamB)) +
+            (teamB === "TBD" ? "<span class='tbd'>TBD</span>" : teamB) +
             (isWinB ? "<span class='winner-badge'>✦ Winner</span>" : "") +
           "</span>" +
-          (showSc ? "<span class='team-score" + (isWinB ? " winner-score" : status==="done" ? " loser-score" : "") + "'>" + esc(scoreB) + "</span>" : "") +
+          (showSc ? "<span class='team-score" + (isWinB ? " winner-score" : status==="done" ? " loser-score" : "") + "'>" + scoreB + "</span>" : "") +
         "</div>" +
       "</div>";
     return card;
@@ -447,7 +447,7 @@ h1 {
     // Check for champion first so we can render banner at top
     Object.keys(stages).forEach(function(stageName) {
       stages[stageName].forEach(function(m) {
-        if (stageName === "Final" && m.Winner) {
+        if ((stageName === "Final" || stageOrder[stageName] === Math.max.apply(null, Object.values(stageOrder))) && m.Winner) {
           champion = m.Winner.trim();
         }
       });
@@ -460,12 +460,12 @@ h1 {
       banner.innerHTML =
         "<span class='champion-trophy'>🏆</span>" +
         "<div class='champion-label'>⚡ Champion ⚡</div>" +
-        "<div class='champion-name'>" + esc(champion) + "</div>";
+        "<div class='champion-name'>" + champion + "</div>";
       container.appendChild(banner);
     }
 
     Object.keys(stages)
-      .sort(function(a,b) { return stageRank(a, stageOrder) - stageRank(b, stageOrder); })
+      .sort(function(a,b) { return stageOrder[a] - stageOrder[b]; })
       .forEach(function(stageName) {
         var matches = stages[stageName];
         var isFinal = stageName === "Final";
@@ -477,8 +477,8 @@ h1 {
         block.className = "stage-block";
         block.innerHTML =
           "<div class='stage-title'>" +
-            "<span class='" + titleCls + "'>" + esc(stageName) + "</span>" +
-            "<span class='stage-pill " + pillCls + "'>" + esc(stageName) + "</span>" +
+            "<span class='" + titleCls + "'>" + stageName + "</span>" +
+            "<span class='stage-pill " + pillCls + "'>" + stageName + "</span>" +
           "</div>" +
           "<div class='matches-grid'></div>";
 
@@ -490,55 +490,6 @@ h1 {
 
         container.appendChild(block);
       });
-  }
-
-
-  /* league-patch v1 */
-  // ---- added: safe text, stage order and league branding ----
-  function esc(v) {
-    return String(v === undefined || v === null ? "" : v).replace(/[&<>"'`]/g, function(c) {
-      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;", "`": "&#96;" }[c];
-    });
-  }
-  var STAGE_RANK = { "Group": 0, "Pre Quarter Final": 1, "Quarter Final": 2, "Semi Final": 3, "Final": 4 };
-  function stageRank(name, fallback) {
-    if (Object.prototype.hasOwnProperty.call(STAGE_RANK, name)) return STAGE_RANK[name];
-    return fallback && fallback[name] !== undefined ? fallback[name] : 99;
-  }
-  function leagueApiBase() { return String(APPS_SCRIPT_URL).split("?")[0]; }
-  function leagueRgba(hex, a) {
-    var m = /^#?([0-9a-f]{6})$/i.exec(String(hex || "").trim()); if (!m) return null;
-    var n = parseInt(m[1], 16); return "rgba(" + (n >> 16 & 255) + "," + (n >> 8 & 255) + "," + (n & 255) + "," + a + ")";
-  }
-  function loadLeagueBranding() {
-    fetch(leagueApiBase() + "?view=config&t=" + Date.now(), { cache: "no-store" })
-      .then(function(r) { return r.json(); })
-      .then(function(cfg) {
-        if (!cfg) return;
-        (cfg.stageOrder || []).forEach(function(s) { if (cfg.stages && cfg.stages[s]) STAGE_RANK[s] = Number(cfg.stages[s].order); });
-        var b = cfg.branding || {}, root = document.documentElement.style;
-        var center = document.querySelector(".logo-center"), right = document.querySelector(".logo-right");
-        if (b.LEAGUE_NAME) { document.title = b.LEAGUE_NAME + (document.title.indexOf("Knockout") >= 0 ? " — Knockouts" : ""); if (center) center.alt = b.LEAGUE_NAME; }
-        if (b.LOGO_URL && center) center.src = b.LOGO_URL;
-        if (b.SPONSOR_LOGO_URL && right) right.src = b.SPONSOR_LOGO_URL;
-        var p = leagueRgba(b.COLOR_PRIMARY, 1) && b.COLOR_PRIMARY, s = leagueRgba(b.COLOR_SECONDARY, 1) && b.COLOR_SECONDARY;
-        if (p) {
-          root.setProperty("--magenta", p); root.setProperty("--magenta-dim", leagueRgba(p, 0.15)); root.setProperty("--magenta-glow", leagueRgba(p, 0.35));
-          ["--loss", "--leader-pts", "--rank-1"].forEach(function(k) { root.setProperty(k, p); });
-        }
-        if (s) {
-          root.setProperty("--cyan", s); root.setProperty("--cyan-dim", leagueRgba(s, 0.12)); root.setProperty("--cyan-glow", leagueRgba(s, 0.35));
-          root.setProperty("--border", leagueRgba(s, 0.12)); root.setProperty("--border-hi", leagueRgba(s, 0.28));
-          ["--win", "--rank-2"].forEach(function(k) { root.setProperty(k, s); }); root.setProperty("--rank-3", leagueRgba(s, 0.55));
-        }
-        if (p || s) {
-          var P = p || "#dd0e23", S = s || "#0b49d3";
-          document.body.style.backgroundImage =
-            "radial-gradient(ellipse 80% 80% at -5% 100%, " + leagueRgba(P, 0.45) + " 0%, " + leagueRgba(P, 0.15) + " 40%, transparent 65%)," +
-            "radial-gradient(ellipse 70% 90% at 105% 50%, " + leagueRgba(S, 0.40) + " 0%, " + leagueRgba(S, 0.12) + " 45%, transparent 70%)," +
-            "radial-gradient(ellipse 50% 60% at 50% 50%, rgba(30,10,50,0.5) 0%, transparent 80%)";
-        }
-      }).catch(function() { /* keep the built-in look */ });
   }
 
   async function refresh() {
@@ -564,7 +515,6 @@ h1 {
     }
   }
 
-  loadLeagueBranding();
   refresh();
   setInterval(refresh, POLL_MS);
 </script>
