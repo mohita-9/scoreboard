@@ -605,7 +605,9 @@ td.td-team.xlong { font-size: clamp(10px, 0.95vw, 14px) !important; letter-spaci
         played: Number(r["Total Matches"] || 0),
         won:    Number(r["Matches Won"]   || 0),
         lost:   Number(r["Matches Lost"]  || 0),
-        points: Number(r["Total Points"]  || 0)
+        points: Number(r["Total Points"]  || 0),
+        diff:   Number(r["Point Diff"]    || 0),
+        rank:   Number(r["Rank"]          || 0)
       };
     }).filter(function(r) { return r.group && r.team; });
   }
@@ -713,7 +715,8 @@ td.td-team.xlong { font-size: clamp(10px, 0.95vw, 14px) !important; letter-spaci
   function renderSlideContent(container, names) {
     container.innerHTML = "";
     names.forEach(function(name) {
-      var list = allGroupData[name].slice().sort(function(a, b) { return b.points - a.points; });
+      // same order as the qualifiers: the server's Rank (wins, then point difference); fallback if Rank is missing
+      var list = allGroupData[name].slice().sort(function(a, b) { return (a.rank && b.rank) ? a.rank - b.rank : (b.won - a.won || b.diff - a.diff); });
       container.appendChild(buildCard(name, list));
     });
   }
