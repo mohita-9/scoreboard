@@ -377,22 +377,33 @@ html.led .ko-nav:empty { display: none; }
 </head>
 <body>
 <script>
-/* led-layout v1: portrait LED wall (504 x 672). On automatically when the screen is about that size;
-   force with ?led=1 (any screen, scaled to fit) or turn off with ?led=0. */
+/* led-layout v2: portrait LED wall (504 x 672 pixels). On automatically when the window is about that size.
+   ?led=1   laptop mirrored to the LED: draws exactly 504 x 672 real screen pixels in the top-left corner,
+            whatever the Windows scaling or browser zoom (add &ledx=..&ledy=.. if the LED starts elsewhere)
+   ?led=fit scale the 504 x 672 layout up to fill the whole window
+   ?led=0   off */
 (function () {
   var W = 504, H = 672;
-  function wanted() {
-    var q = /[?&]led=([01])/.exec(location.search);
-    if (q) return q[1] === "1";
+  function param(k) { var m = new RegExp("[?&]" + k + "=([^&]*)").exec(location.search); return m ? decodeURIComponent(m[1]) : null; }
+  function mode() {
+    var q = param("led");
+    if (q === "0") return "";
+    if (q === "fit") return "fit";
+    if (q !== null) return "pixel";
     var w = window.innerWidth, h = window.innerHeight;
-    return w >= 480 && w <= 540 && h >= 640 && h <= 720;
+    return w >= 480 && w <= 540 && h >= 640 && h <= 720 ? "auto" : "";
   }
   function apply() {
-    var on = wanted(), root = document.documentElement;
-    root.classList.toggle("led", on);
-    var s = on ? Math.min(window.innerWidth / W, window.innerHeight / H) : 1;
-    document.body.style.transform = on && Math.abs(s - 1) > 0.01
-      ? "translate(" + ((window.innerWidth - W * s) / 2) + "px,0) scale(" + s + ")" : "";
+    var m = mode(), root = document.documentElement, t = "";
+    root.classList.toggle("led", !!m);
+    if (m === "pixel") {
+      var d = window.devicePixelRatio || 1, x = (+param("ledx") || 0) / d, y = (+param("ledy") || 0) / d;
+      t = "translate(" + x + "px," + y + "px) scale(" + (1 / d) + ")";
+    } else if (m === "fit") {
+      var s = Math.min(window.innerWidth / W, window.innerHeight / H);
+      t = "translate(" + ((window.innerWidth - W * s) / 2) + "px,0) scale(" + s + ")";
+    }
+    document.body.style.transform = t;
   }
   window.isLed = function () { return document.documentElement.classList.contains("led"); };
   apply();
