@@ -554,33 +554,38 @@ html.led .slide-progress { flex: 0 0 auto; margin-top: 5px; }
 </head>
 <body>
 <script>
-/* led-layout v2: portrait LED wall (504 x 672 pixels). On automatically when the window is about that size.
-   ?led=1   laptop mirrored to the LED: draws exactly 504 x 672 real screen pixels in the top-left corner,
-            whatever the Windows scaling or browser zoom (add &ledx=..&ledy=.. if the LED starts elsewhere)
-   ?led=fit scale the 504 x 672 layout up to fill the whole window
-   ?led=0   off */
+/* led-layout v3: portrait LED wall (504 x 672 pixels). On automatically when the window is about that size.
+   ?led=1     laptop shown on the LED (the LED shrinks the whole laptop screen to fit): the scoreboard fills the
+              entire window, edge to edge. Press F11 so the browser bar and taskbar are hidden.
+   ?led=pixel the LED copies only the top-left 504 x 672 pixels of the laptop screen: draw exactly there
+              (add &ledx=..&ledy=.. if the LED area starts elsewhere)
+   ?led=0     off */
 (function () {
   var W = 504, H = 672;
   function param(k) { var m = new RegExp("[?&]" + k + "=([^&]*)").exec(location.search); return m ? decodeURIComponent(m[1]) : null; }
   function mode() {
     var q = param("led");
     if (q === "0") return "";
-    if (q === "fit") return "fit";
-    if (q !== null) return "pixel";
+    if (q === "pixel") return "pixel";
+    if (q !== null) return "fill";
     var w = window.innerWidth, h = window.innerHeight;
     return w >= 480 && w <= 540 && h >= 640 && h <= 720 ? "auto" : "";
   }
   function apply() {
-    var m = mode(), root = document.documentElement, t = "";
+    var m = mode(), root = document.documentElement, body = document.body, t = "", w = "", h = "";
     root.classList.toggle("led", !!m);
     if (m === "pixel") {
       var d = window.devicePixelRatio || 1, x = (+param("ledx") || 0) / d, y = (+param("ledy") || 0) / d;
       t = "translate(" + x + "px," + y + "px) scale(" + (1 / d) + ")";
-    } else if (m === "fit") {
+    } else if (m === "fill") {
+      // scale the 504 x 672 design up, then stretch the layout so it covers the whole window
       var s = Math.min(window.innerWidth / W, window.innerHeight / H);
-      t = "translate(" + ((window.innerWidth - W * s) / 2) + "px,0) scale(" + s + ")";
+      w = (window.innerWidth / s) + "px"; h = (window.innerHeight / s) + "px";
+      t = "scale(" + s + ")";
     }
-    document.body.style.transform = t;
+    body.style.transform = t;
+    if (w) { body.style.setProperty("width", w, "important"); body.style.setProperty("height", h, "important"); }
+    else { body.style.removeProperty("width"); body.style.removeProperty("height"); }
   }
   window.isLed = function () { return document.documentElement.classList.contains("led"); };
   apply();
