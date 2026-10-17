@@ -335,12 +335,12 @@ html.led { overflow: hidden; }
 html.led body { width: 504px !important; height: 672px !important; min-height: 0 !important; overflow: hidden;
   padding: 8px 12px 8px !important; display: flex; flex-direction: column; transform-origin: 0 0;
   font-family: "Inter", "Segoe UI", Roboto, Arial, sans-serif; }
-html.led .page-header { flex: 0 0 auto; margin-bottom: 8px !important; padding-top: 0 !important; padding-bottom: 22px !important;
+html.led .page-header { flex: 0 0 auto; margin-bottom: 6px !important; padding-top: 0 !important; padding-bottom: 22px !important;
   grid-template-columns: minmax(0,1fr) auto minmax(0,1fr) !important; gap: 6px !important; }
 html.led .page-header::after { width: 90px; }
-html.led .logo-center { height: 86px !important; max-width: 240px !important; }
-html.led .page-header .logo-left.badminton-art { height: 66px !important; }
-html.led .page-header .logo-right { height: 46px !important; max-width: 100%; }
+html.led .logo-center { height: 74px !important; max-width: 220px !important; }
+html.led .page-header .logo-left.badminton-art { height: 58px !important; }
+html.led .page-header .logo-right { height: 42px !important; max-width: 100%; }
 html.led .header-center .live-pill { top: calc(100% + 2px); font-size: 10px; padding: 2px 9px 2px 6px; gap: 5px; }
 
 html.led .stages { flex: 1 1 auto; min-height: 0; gap: 0; transition: opacity 0.4s ease; }
@@ -349,17 +349,17 @@ html.led .stage-title { font-size: 24px; margin-bottom: 6px; gap: 10px; }
 html.led .stage-pill { font-size: 12px; padding: 2px 10px; }
 html.led .matches-grid { grid-template-columns: 1fr; gap: 7px; }
 html.led .match-header { padding: 3px 12px 2px; }
-html.led .match-num { font-size: 12px; color: var(--text-sub); }
+html.led .match-num { font-size: 13px; color: var(--text-sub); }
 html.led .match-status { font-size: 11px; }
 html.led .match-body { padding: 1px 12px 2px; }
 html.led .team-row { padding: 3px 0; min-height: 34px; }
 html.led .vs-divider { display: none; }
-html.led .team-name { font-size: 18px; }
-html.led .team-name.long  { font-size: 16px !important; }
-html.led .team-name.xlong { font-size: 14px !important; }
+html.led .team-name { font-size: 21px; font-weight: 600; }
+html.led .team-name.long  { font-size: 18px !important; }
+html.led .team-name.xlong { font-size: 15px !important; }
 html.led .tbd { font-size: 16px; }
 html.led .winner-badge { font-size: 11px; }
-html.led .team-score { font-size: 28px; min-width: 40px; line-height: 1; }
+html.led .team-score { font-size: 32px; min-width: 44px; line-height: 1; }
 html.led .champion-banner { padding: 10px 14px; margin-bottom: 10px; }
 html.led .champion-trophy { font-size: 34px; }
 html.led .champion-label { font-size: 22px; }
@@ -377,37 +377,49 @@ html.led .ko-nav:empty { display: none; }
 </head>
 <body>
 <script>
-/* led-layout v2: portrait LED wall (504 x 672 pixels). On automatically when the window is about that size.
-   ?led=1   laptop mirrored to the LED: draws exactly 504 x 672 real screen pixels in the top-left corner,
-            whatever the Windows scaling or browser zoom (add &ledx=..&ledy=.. if the LED starts elsewhere)
-   ?led=fit scale the 504 x 672 layout up to fill the whole window
-   ?led=0   off */
+/* led-layout v4: portrait LED wall (504 x 672 pixels). On automatically when the window is about that size.
+   ?led=1     laptop shown on the LED (the LED shrinks the whole laptop screen to fit): the scoreboard fills the
+              entire window, edge to edge. Press F11 so the browser bar and taskbar are hidden.
+   ?led=pixel the LED copies only the top-left 504 x 672 pixels of the laptop screen: draw exactly there
+              (add &ledx=..&ledy=.. if the LED area starts elsewhere)
+   ?led=0     off */
 (function () {
   var W = 504, H = 672;
   function param(k) { var m = new RegExp("[?&]" + k + "=([^&]*)").exec(location.search); return m ? decodeURIComponent(m[1]) : null; }
   function mode() {
     var q = param("led");
     if (q === "0") return "";
-    if (q === "fit") return "fit";
-    if (q !== null) return "pixel";
+    if (q === "pixel") return "pixel";
+    if (q !== null) return "fill";
     var w = window.innerWidth, h = window.innerHeight;
     return w >= 480 && w <= 540 && h >= 640 && h <= 720 ? "auto" : "";
   }
   function apply() {
-    var m = mode(), root = document.documentElement, t = "";
+    var m = mode(), root = document.documentElement, body = document.body, t = "", w = "", h = "";
     root.classList.toggle("led", !!m);
     if (m === "pixel") {
       var d = window.devicePixelRatio || 1, x = (+param("ledx") || 0) / d, y = (+param("ledy") || 0) / d;
       t = "translate(" + x + "px," + y + "px) scale(" + (1 / d) + ")";
-    } else if (m === "fit") {
-      var s = Math.min(window.innerWidth / W, window.innerHeight / H);
-      t = "translate(" + ((window.innerWidth - W * s) / 2) + "px,0) scale(" + s + ")";
+    } else if (m === "fill") {
+      // stretch the exact 504 x 672 design over the whole window. On a wide laptop screen this looks stretched,
+      // but the LED squeezes the laptop picture back into 504 x 672, so on the LED it comes out in proportion.
+      t = "scale(" + (window.innerWidth / W) + "," + (window.innerHeight / H) + ")";
     }
-    document.body.style.transform = t;
+    body.style.transform = t;
+    if (w) { body.style.setProperty("width", w, "important"); body.style.setProperty("height", h, "important"); }
+    else { body.style.removeProperty("width"); body.style.removeProperty("height"); }
   }
   window.isLed = function () { return document.documentElement.classList.contains("led"); };
   apply();
   window.addEventListener("resize", apply);
+  // on the LED, one click or key press anywhere on the page goes full screen (hides the browser bar and taskbar)
+  function full() {
+    var r = document.documentElement;
+    if (!window.isLed() || document.fullscreenElement || document.webkitFullscreenElement) return;
+    (r.requestFullscreen || r.webkitRequestFullscreen || function () {}).call(r);
+  }
+  document.addEventListener("click", full);
+  document.addEventListener("keydown", function (e) { if (e.key !== "F11") full(); });
 })();
 </script>
 
