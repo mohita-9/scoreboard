@@ -512,39 +512,40 @@ html.led { overflow: hidden; }
 html.led body { width: 504px !important; height: 672px !important; min-height: 0 !important; overflow: hidden;
   padding: 8px 12px 8px !important; display: flex; flex-direction: column; transform-origin: 0 0;
   font-family: "Inter", "Segoe UI", Roboto, Arial, sans-serif; }
-html.led .page-header { flex: 0 0 auto; margin-bottom: 8px !important; padding-top: 0 !important; padding-bottom: 22px !important;
+html.led .page-header { flex: 0 0 auto; margin-bottom: 6px !important; padding-top: 0 !important; padding-bottom: 22px !important;
   grid-template-columns: minmax(0,1fr) auto minmax(0,1fr) !important; gap: 6px !important; }
 html.led .page-header::after { width: 90px; }
-html.led .logo-center { height: 86px !important; max-width: 240px !important; }
-html.led .page-header .logo-left.badminton-art { height: 66px !important; }
-html.led .page-header .logo-right { height: 46px !important; max-width: 100%; }
+html.led .logo-center { height: 74px !important; max-width: 220px !important; }
+html.led .page-header .logo-left.badminton-art { height: 58px !important; }
+html.led .page-header .logo-right { height: 42px !important; max-width: 100%; }
 html.led .header-center .live-pill { top: calc(100% + 2px); font-size: 10px; padding: 2px 9px 2px 6px; gap: 5px; }
 
-html.led .live-courts { flex: 0 0 auto; display: flex; flex-direction: column; flex-wrap: nowrap; gap: 4px; margin: 0 0 8px !important; }
-html.led .lc-card { width: 100%; min-width: 0; padding: 4px 10px; column-gap: 10px; border-radius: 10px;
+html.led .live-courts { flex: 0 0 auto; display: flex; flex-direction: column; flex-wrap: nowrap; gap: 3px; margin: 0 0 6px !important; }
+html.led .lc-card { width: 100%; min-width: 0; padding: 3px 10px; column-gap: 10px; border-radius: 10px;
   grid-template-columns: 92px minmax(0, 1fr) auto; }
-html.led .lc-court { font-size: 15px; grid-row: 1; align-self: end; }
-html.led .lc-team { font-size: 14px !important; line-height: 1.15; }
+html.led .lc-court { font-size: 16px; grid-row: 1; align-self: end; }
+html.led .lc-team { font-size: 15px !important; line-height: 1.12; font-weight: 600; }
+html.led .lc-team.long { font-size: 14px !important; }
 html.led .lc-team.xlong { font-size: 12px !important; }
-html.led .lc-pts { font-size: 22px; line-height: 1.05; }
+html.led .lc-pts { font-size: 22px; line-height: 1; }
 html.led .lc-meta { grid-column: 1; grid-row: 2; align-self: start; font-size: 9px; letter-spacing: 0.08em; line-height: 1.2; margin-top: 1px; }
 html.led #groups { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: 0; }
-html.led .group-card { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; padding: 10px 12px 8px; border-radius: 14px; }
-html.led .group-title-bar { margin-bottom: 6px; }
-html.led .group-name { font-size: 28px; }
+html.led .group-card { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; padding: 6px 12px 4px; border-radius: 14px; }
+html.led .group-title-bar { margin-bottom: 2px; }
+html.led .group-name { font-size: 30px; line-height: 1; }
 html.led .group-card table { flex: 1 1 auto; height: 100%; }
-html.led thead th { font-size: 12px; padding-bottom: 4px; }
-html.led thead th.th-rank, html.led td.td-rank { width: 26px !important; }
-html.led thead th.th-num, html.led td.td-num { width: 38px !important; }
-html.led thead th.th-pts, html.led td.td-pts { width: 52px !important; }
-html.led td { padding-top: 4px !important; padding-bottom: 4px !important; }
-html.led td.td-rank { font-size: 16px; }
-html.led td.td-team { font-size: 18px !important; line-height: 1.2; }
-html.led td.td-team.long  { font-size: 16px !important; }
-html.led td.td-team.xlong { font-size: 14px !important; }
-html.led td.td-num { font-size: 19px; color: var(--text-sub); }
+html.led thead th { font-size: 14px; padding-bottom: 2px; color: #d0d6de; }
+html.led thead th.th-rank, html.led td.td-rank { width: 28px !important; }
+html.led thead th.th-num, html.led td.td-num { width: 46px !important; }
+html.led thead th.th-pts, html.led td.td-pts { width: 62px !important; }
+html.led td { padding-top: 2px !important; padding-bottom: 2px !important; }
+html.led td.td-rank { font-size: 20px; }
+html.led td.td-team { font-size: 21px !important; line-height: 1.12; font-weight: 600; }
+html.led td.td-team.long  { font-size: 18px !important; }
+html.led td.td-team.xlong { font-size: 15px !important; }
+html.led td.td-num { font-size: 25px; font-weight: 600; color: #c4cad3; }
 html.led td.td-num.td-w { color: var(--win); } html.led td.td-num.td-l { color: var(--loss); }
-html.led td.td-pts { font-size: 30px; }
+html.led td.td-pts { font-size: 36px; line-height: 1; color: #e6e9ee; }
 html.led .slide-nav { flex: 0 0 auto; margin-top: 6px; gap: 10px; }
 html.led .slide-counter { font-size: 12px; color: var(--text-sub); }
 html.led .slide-dot { width: 7px; height: 7px; }
@@ -554,7 +555,7 @@ html.led .slide-progress { flex: 0 0 auto; margin-top: 5px; }
 </head>
 <body>
 <script>
-/* led-layout v3: portrait LED wall (504 x 672 pixels). On automatically when the window is about that size.
+/* led-layout v4: portrait LED wall (504 x 672 pixels). On automatically when the window is about that size.
    ?led=1     laptop shown on the LED (the LED shrinks the whole laptop screen to fit): the scoreboard fills the
               entire window, edge to edge. Press F11 so the browser bar and taskbar are hidden.
    ?led=pixel the LED copies only the top-left 504 x 672 pixels of the laptop screen: draw exactly there
@@ -578,10 +579,9 @@ html.led .slide-progress { flex: 0 0 auto; margin-top: 5px; }
       var d = window.devicePixelRatio || 1, x = (+param("ledx") || 0) / d, y = (+param("ledy") || 0) / d;
       t = "translate(" + x + "px," + y + "px) scale(" + (1 / d) + ")";
     } else if (m === "fill") {
-      // scale the 504 x 672 design up, then stretch the layout so it covers the whole window
-      var s = Math.min(window.innerWidth / W, window.innerHeight / H);
-      w = (window.innerWidth / s) + "px"; h = (window.innerHeight / s) + "px";
-      t = "scale(" + s + ")";
+      // stretch the exact 504 x 672 design over the whole window. On a wide laptop screen this looks stretched,
+      // but the LED squeezes the laptop picture back into 504 x 672, so on the LED it comes out in proportion.
+      t = "scale(" + (window.innerWidth / W) + "," + (window.innerHeight / H) + ")";
     }
     body.style.transform = t;
     if (w) { body.style.setProperty("width", w, "important"); body.style.setProperty("height", h, "important"); }
@@ -590,6 +590,14 @@ html.led .slide-progress { flex: 0 0 auto; margin-top: 5px; }
   window.isLed = function () { return document.documentElement.classList.contains("led"); };
   apply();
   window.addEventListener("resize", apply);
+  // on the LED, one click or key press anywhere on the page goes full screen (hides the browser bar and taskbar)
+  function full() {
+    var r = document.documentElement;
+    if (!window.isLed() || document.fullscreenElement || document.webkitFullscreenElement) return;
+    (r.requestFullscreen || r.webkitRequestFullscreen || function () {}).call(r);
+  }
+  document.addEventListener("click", full);
+  document.addEventListener("keydown", function (e) { if (e.key !== "F11") full(); });
 })();
 </script>
 
