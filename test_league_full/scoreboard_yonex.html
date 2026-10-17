@@ -506,10 +506,76 @@ td.td-team { white-space: normal !important; overflow: visible !important; text-
   overflow-wrap: anywhere; word-break: normal; line-height: 1.25; padding-right: 8px !important; }
 td.td-team.long  { font-size: clamp(11px, 1.05vw, 16px) !important; }
 td.td-team.xlong { font-size: clamp(10px, 0.95vw, 14px) !important; letter-spacing: -0.005em; }
+
+/* led-layout v1: portrait LED wall, 504 x 672 (set by the script at the top of <body>) */
+html.led { overflow: hidden; }
+html.led body { width: 504px !important; height: 672px !important; min-height: 0 !important; overflow: hidden;
+  padding: 8px 12px 8px !important; display: flex; flex-direction: column; transform-origin: 0 0;
+  font-family: "Inter", "Segoe UI", Roboto, Arial, sans-serif; }
+html.led .page-header { flex: 0 0 auto; margin-bottom: 8px !important; padding-top: 0 !important; padding-bottom: 22px !important;
+  grid-template-columns: minmax(0,1fr) auto minmax(0,1fr) !important; gap: 6px !important; }
+html.led .page-header::after { width: 90px; }
+html.led .logo-center { height: 86px !important; max-width: 240px !important; }
+html.led .page-header .logo-left.badminton-art { height: 66px !important; }
+html.led .page-header .logo-right { height: 46px !important; max-width: 100%; }
+html.led .header-center .live-pill { top: calc(100% + 2px); font-size: 10px; padding: 2px 9px 2px 6px; gap: 5px; }
+
+html.led .live-courts { flex: 0 0 auto; display: flex; flex-direction: column; flex-wrap: nowrap; gap: 4px; margin: 0 0 8px !important; }
+html.led .lc-card { width: 100%; min-width: 0; padding: 4px 10px; column-gap: 10px; border-radius: 10px;
+  grid-template-columns: 92px minmax(0, 1fr) auto; }
+html.led .lc-court { font-size: 15px; grid-row: 1; align-self: end; }
+html.led .lc-team { font-size: 14px !important; line-height: 1.15; }
+html.led .lc-team.xlong { font-size: 12px !important; }
+html.led .lc-pts { font-size: 22px; line-height: 1.05; }
+html.led .lc-meta { grid-column: 1; grid-row: 2; align-self: start; font-size: 9px; letter-spacing: 0.08em; line-height: 1.2; margin-top: 1px; }
+html.led #groups { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: 0; }
+html.led .group-card { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; padding: 10px 12px 8px; border-radius: 14px; }
+html.led .group-title-bar { margin-bottom: 6px; }
+html.led .group-name { font-size: 28px; }
+html.led .group-card table { flex: 1 1 auto; height: 100%; }
+html.led thead th { font-size: 12px; padding-bottom: 4px; }
+html.led thead th.th-rank, html.led td.td-rank { width: 26px !important; }
+html.led thead th.th-num, html.led td.td-num { width: 38px !important; }
+html.led thead th.th-pts, html.led td.td-pts { width: 52px !important; }
+html.led td { padding-top: 4px !important; padding-bottom: 4px !important; }
+html.led td.td-rank { font-size: 16px; }
+html.led td.td-team { font-size: 18px !important; line-height: 1.2; }
+html.led td.td-team.long  { font-size: 16px !important; }
+html.led td.td-team.xlong { font-size: 14px !important; }
+html.led td.td-num { font-size: 19px; color: var(--text-sub); }
+html.led td.td-num.td-w { color: var(--win); } html.led td.td-num.td-l { color: var(--loss); }
+html.led td.td-pts { font-size: 30px; }
+html.led .slide-nav { flex: 0 0 auto; margin-top: 6px; gap: 10px; }
+html.led .slide-counter { font-size: 12px; color: var(--text-sub); }
+html.led .slide-dot { width: 7px; height: 7px; }
+html.led .slide-progress { flex: 0 0 auto; margin-top: 5px; }
 </style>
 <script src="league-config.js"></script>
 </head>
 <body>
+<script>
+/* led-layout v1: portrait LED wall (504 x 672). On automatically when the screen is about that size;
+   force with ?led=1 (any screen, scaled to fit) or turn off with ?led=0. */
+(function () {
+  var W = 504, H = 672;
+  function wanted() {
+    var q = /[?&]led=([01])/.exec(location.search);
+    if (q) return q[1] === "1";
+    var w = window.innerWidth, h = window.innerHeight;
+    return w >= 480 && w <= 540 && h >= 640 && h <= 720;
+  }
+  function apply() {
+    var on = wanted(), root = document.documentElement;
+    root.classList.toggle("led", on);
+    var s = on ? Math.min(window.innerWidth / W, window.innerHeight / H) : 1;
+    document.body.style.transform = on && Math.abs(s - 1) > 0.01
+      ? "translate(" + ((window.innerWidth - W * s) / 2) + "px,0) scale(" + s + ")" : "";
+  }
+  window.isLed = function () { return document.documentElement.classList.contains("led"); };
+  apply();
+  window.addEventListener("resize", apply);
+})();
+</script>
 
 <header class="page-header">
   <div class="header-left">
@@ -594,7 +660,8 @@ td.td-team.xlong { font-size: clamp(10px, 0.95vw, 14px) !important; letter-spaci
   let allGroupData  = {};
   let slideIndex    = 0;
   let slideTimer    = null;
-  const GROUPS_PER_SLIDE = 2;
+  // led-layout v1: one group a page on the LED wall and on narrow screens (8 pages for G1-G8), two side by side on wide screens
+  function groupsPerSlide() { return (window.isLed && window.isLed()) || window.innerWidth < 900 ? 1 : 2; }
   const SLIDE_MS = 8000;
 
   function parseJson(data) {
@@ -671,7 +738,7 @@ td.td-team.xlong { font-size: clamp(10px, 0.95vw, 14px) !important; letter-spaci
   }
 
   function totalSlides() {
-    return Math.ceil(allGroupNames.length / GROUPS_PER_SLIDE);
+    return Math.ceil(allGroupNames.length / groupsPerSlide());
   }
 
   function updateDots() {
@@ -691,7 +758,7 @@ td.td-team.xlong { font-size: clamp(10px, 0.95vw, 14px) !important; letter-spaci
 
   function showSlide(idx, animate) {
     var container = document.getElementById("groups");
-    var names = allGroupNames.slice(idx * GROUPS_PER_SLIDE, idx * GROUPS_PER_SLIDE + GROUPS_PER_SLIDE);
+    var names = allGroupNames.slice(idx * groupsPerSlide(), (idx + 1) * groupsPerSlide());
 
     if (animate) {
       container.classList.add("fade-out");
@@ -874,6 +941,7 @@ td.td-team.xlong { font-size: clamp(10px, 0.95vw, 14px) !important; letter-spaci
     }
   }
 
+  window.addEventListener("resize", function () { if (!allGroupNames.length) return; if (slideIndex >= totalSlides()) slideIndex = 0; showSlide(slideIndex, false); });
   loadLeagueBranding();
   refreshLiveCourts();
   setInterval(refreshLiveCourts, LIVE_POLL_MS);

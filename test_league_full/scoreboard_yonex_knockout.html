@@ -329,10 +329,76 @@ body { min-height: 100vh; }
 .winner-badge { white-space: nowrap; display: inline-block; }
 .team-score { flex: 0 0 auto; }
 .champion-name { overflow-wrap: anywhere; max-width: 100%; }
+
+/* led-layout v1: portrait LED wall, 504 x 672 (set by the script at the top of <body>) */
+html.led { overflow: hidden; }
+html.led body { width: 504px !important; height: 672px !important; min-height: 0 !important; overflow: hidden;
+  padding: 8px 12px 8px !important; display: flex; flex-direction: column; transform-origin: 0 0;
+  font-family: "Inter", "Segoe UI", Roboto, Arial, sans-serif; }
+html.led .page-header { flex: 0 0 auto; margin-bottom: 8px !important; padding-top: 0 !important; padding-bottom: 22px !important;
+  grid-template-columns: minmax(0,1fr) auto minmax(0,1fr) !important; gap: 6px !important; }
+html.led .page-header::after { width: 90px; }
+html.led .logo-center { height: 86px !important; max-width: 240px !important; }
+html.led .page-header .logo-left.badminton-art { height: 66px !important; }
+html.led .page-header .logo-right { height: 46px !important; max-width: 100%; }
+html.led .header-center .live-pill { top: calc(100% + 2px); font-size: 10px; padding: 2px 9px 2px 6px; gap: 5px; }
+
+html.led .stages { flex: 1 1 auto; min-height: 0; gap: 0; transition: opacity 0.4s ease; }
+html.led .stages.fade-out { opacity: 0; }
+html.led .stage-title { font-size: 24px; margin-bottom: 6px; gap: 10px; }
+html.led .stage-pill { font-size: 12px; padding: 2px 10px; }
+html.led .matches-grid { grid-template-columns: 1fr; gap: 7px; }
+html.led .match-header { padding: 3px 12px 2px; }
+html.led .match-num { font-size: 12px; color: var(--text-sub); }
+html.led .match-status { font-size: 11px; }
+html.led .match-body { padding: 1px 12px 2px; }
+html.led .team-row { padding: 3px 0; min-height: 34px; }
+html.led .vs-divider { display: none; }
+html.led .team-name { font-size: 18px; }
+html.led .team-name.long  { font-size: 16px !important; }
+html.led .team-name.xlong { font-size: 14px !important; }
+html.led .tbd { font-size: 16px; }
+html.led .winner-badge { font-size: 11px; }
+html.led .team-score { font-size: 28px; min-width: 40px; line-height: 1; }
+html.led .champion-banner { padding: 10px 14px; margin-bottom: 10px; }
+html.led .champion-trophy { font-size: 34px; }
+html.led .champion-label { font-size: 22px; }
+html.led .champion-name { font-size: 38px; }
+html.led .empty-state { padding: 24px; font-size: 16px; }
+.ko-nav { display: none; }
+html.led .ko-nav { flex: 0 0 auto; display: flex; justify-content: center; align-items: center; gap: 10px; margin-top: 6px; }
+html.led .ko-nav:empty { display: none; }
+.ko-nav .slide-counter { font-size: 12px; font-weight: 500; letter-spacing: 0.1em; color: var(--text-sub); }
+.ko-nav .slide-dots { display: flex; gap: 8px; }
+.ko-nav .slide-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text-muted); }
+.ko-nav .slide-dot.active { background: var(--magenta); box-shadow: 0 0 8px var(--magenta-glow); transform: scale(1.3); }
 </style>
 <script src="league-config.js"></script>
 </head>
 <body>
+<script>
+/* led-layout v1: portrait LED wall (504 x 672). On automatically when the screen is about that size;
+   force with ?led=1 (any screen, scaled to fit) or turn off with ?led=0. */
+(function () {
+  var W = 504, H = 672;
+  function wanted() {
+    var q = /[?&]led=([01])/.exec(location.search);
+    if (q) return q[1] === "1";
+    var w = window.innerWidth, h = window.innerHeight;
+    return w >= 480 && w <= 540 && h >= 640 && h <= 720;
+  }
+  function apply() {
+    var on = wanted(), root = document.documentElement;
+    root.classList.toggle("led", on);
+    var s = on ? Math.min(window.innerWidth / W, window.innerHeight / H) : 1;
+    document.body.style.transform = on && Math.abs(s - 1) > 0.01
+      ? "translate(" + ((window.innerWidth - W * s) / 2) + "px,0) scale(" + s + ")" : "";
+  }
+  window.isLed = function () { return document.documentElement.classList.contains("led"); };
+  apply();
+  window.addEventListener("resize", apply);
+})();
+</script>
 
 <header class="page-header">
   <div class="header-left">
@@ -395,6 +461,7 @@ body { min-height: 100vh; }
 <div class="stages" id="stages">
   <div class="empty-state">Loading matches…</div>
 </div>
+<div class="ko-nav" id="ko-nav"></div>
 
 <script>
   // league-config v3: the link comes from league-config.js (shared by all pages); the one here is a fallback
@@ -509,7 +576,81 @@ body { min-height: 100vh; }
 
         container.appendChild(block);
       });
+    ledKo();
   }
+
+  /* led-layout v1: on the LED wall the knockouts rotate one page at a time
+     (at most 4 matches a page; the champion, when there is one, gets the first page with the final) */
+  var KO_PAGE_MAX = 4, KO_PAGE_MS = 8000, koPage = 0, koPages = [], koTimer = null;
+  function buildKoPages() {
+    var cont = document.getElementById("stages"), pages = [];
+    var banner = cont.querySelector(".champion-banner");
+    var blocks = [].slice.call(cont.querySelectorAll(".stage-block"));
+    if (banner) {
+      var fin = blocks.filter(function (b) { return b.querySelector(".final-card"); })[0];
+      pages.push({ banner: banner, block: fin || null, cards: fin ? [].slice.call(fin.querySelectorAll(".match-card")) : [], part: "" });
+    }
+    var pending = null;   // small stages (semis + final) share a page when they fit
+    blocks.forEach(function (b) {
+      var cards = [].slice.call(b.querySelectorAll(".match-card"));
+      var n = Math.ceil(cards.length / KO_PAGE_MAX);
+      for (var i = 0; i < n; i++) {
+        var part = cards.slice(i * KO_PAGE_MAX, (i + 1) * KO_PAGE_MAX);
+        var item = { block: b, cards: part, part: n > 1 ? " · " + (i + 1) + "/" + n : "" };
+        if (pending && n === 1 && pending.count + part.length <= 3) { pending.items.push(item); pending.count += part.length; continue; }
+        pending = { items: [item], count: part.length };
+        pages.push(pending);
+      }
+    });
+    return pages;
+  }
+  function showKoPage(animate) {
+    var cont = document.getElementById("stages");
+    if (!cont.dataset.full) return;
+    var tmp = document.createElement("div");
+    tmp.innerHTML = cont.dataset.full;
+    cont.innerHTML = "";
+    cont.appendChild(tmp);
+    koPages = buildKoPages();
+    if (koPage >= koPages.length) koPage = 0;
+    var p = koPages[koPage], out = document.createDocumentFragment();
+    function addBlock(item) {
+      if (!item.block) return;
+      var block = item.block.cloneNode(false), title = item.block.querySelector(".stage-title").cloneNode(true);
+      var grid = document.createElement("div");
+      grid.className = "matches-grid";
+      if (item.part) title.querySelector(".stage-pill").textContent += item.part;
+      item.cards.forEach(function (c) { grid.appendChild(c); });
+      block.appendChild(title); block.appendChild(grid);
+      out.appendChild(block);
+    }
+    if (p && p.banner) { out.appendChild(p.banner); addBlock(p); }
+    else if (p) p.items.forEach(function (it, i) { addBlock(it); if (i < p.items.length - 1) out.lastChild.style.marginBottom = "12px"; });
+    cont.innerHTML = "";
+    cont.appendChild(out);
+    var nav = document.getElementById("ko-nav");
+    if (nav) {
+      var dots = "";
+      for (var i = 0; i < koPages.length; i++) dots += "<span class='slide-dot" + (i === koPage ? " active" : "") + "'></span>";
+      nav.innerHTML = koPages.length > 1 ? "<span class='slide-counter'>" + (koPage + 1) + " / " + koPages.length + "</span><div class='slide-dots'>" + dots + "</div>" : "";
+    }
+  }
+  function ledKo() {
+    var cont = document.getElementById("stages");
+    if (!window.isLed || !window.isLed()) {
+      if (cont.dataset.full) { cont.innerHTML = cont.dataset.full; delete cont.dataset.full; }
+      var nav = document.getElementById("ko-nav"); if (nav) nav.innerHTML = "";
+      return;
+    }
+    cont.dataset.full = cont.innerHTML;
+    showKoPage(false);
+    if (!koTimer) koTimer = setInterval(function () {
+      if (!window.isLed() || !cont.dataset.full || koPages.length < 2) return;
+      cont.classList.add("fade-out");
+      setTimeout(function () { koPage = (koPage + 1) % koPages.length; showKoPage(true); cont.classList.remove("fade-out"); }, 400);
+    }, KO_PAGE_MS);
+  }
+  window.addEventListener("resize", function () { if (lastGoodData) render(lastGoodData); });
 
 
   /* league-patch v1 */
