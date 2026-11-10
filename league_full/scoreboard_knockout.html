@@ -693,6 +693,10 @@ html.led .ko-nav:empty { display: none; }
     var m = /^#?([0-9a-f]{6})$/i.exec(String(hex || "").trim()); if (!m) return null;
     var n = parseInt(m[1], 16); return "rgba(" + (n >> 16 & 255) + "," + (n >> 8 & 255) + "," + (n & 255) + "," + a + ")";
   }
+  function leagueHex(v) { // accepts #abc, abc, #aabbcc or aabbcc; returns #aabbcc or null
+    var m = /^#?([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(String(v || "").trim()); if (!m) return null;
+    var h = m[1]; if (h.length === 3) h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2]; return "#" + h.toLowerCase();
+  }
   function loadLeagueBranding() {
     fetch(leagueApiBase() + "?view=config&t=" + Date.now(), { cache: "no-store" })
       .then(function(r) { return r.json(); })
@@ -703,8 +707,19 @@ html.led .ko-nav:empty { display: none; }
         var center = document.querySelector(".logo-center"), right = document.querySelector(".logo-right");
         if (b.LEAGUE_NAME) { document.title = b.LEAGUE_NAME + (document.title.indexOf("Knockout") >= 0 ? " — Knockouts" : ""); if (center) center.alt = b.LEAGUE_NAME; }
         if (b.LOGO_URL && center) center.src = b.LOGO_URL;
+        // branding v2: no LOGO_URL for a new league name -> show the name (and subtitle) as text instead of the old logo
+        if (b.LEAGUE_NAME && !b.LOGO_URL && center && String(b.LEAGUE_NAME).trim() !== "CXO Baddy League") {
+          if (!document.getElementById("league-title-css")) {
+            var st = document.createElement("style"); st.id = "league-title-css";
+            st.textContent = ".league-title{text-align:center;max-width:60vw}.league-title h1{margin:0;font-family:'Barlow Condensed',sans-serif;font-size:clamp(28px,4.4vw,64px);font-weight:700;letter-spacing:.04em;text-transform:uppercase;line-height:1;background:linear-gradient(90deg,var(--magenta) 0%,var(--cyan) 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}.league-title .lt-sub{font-size:11px;font-weight:500;letter-spacing:.2em;text-transform:uppercase;color:var(--text-sub);margin-top:6px}html.led .league-title{max-width:300px}html.led .league-title h1{font-size:34px}";
+            document.head.appendChild(st);
+          }
+          var lt = document.createElement("div"); lt.className = "league-title";
+          lt.innerHTML = "<h1>" + esc(b.LEAGUE_NAME) + "</h1>" + (b.LEAGUE_SUBTITLE ? '<div class="lt-sub">' + esc(b.LEAGUE_SUBTITLE) + "</div>" : "");
+          center.parentNode.replaceChild(lt, center);
+        }
         if (b.SPONSOR_LOGO_URL && right) right.src = b.SPONSOR_LOGO_URL;
-        var p = leagueRgba(b.COLOR_PRIMARY, 1) && b.COLOR_PRIMARY, s = leagueRgba(b.COLOR_SECONDARY, 1) && b.COLOR_SECONDARY;
+        var p = leagueHex(b.COLOR_PRIMARY), s = leagueHex(b.COLOR_SECONDARY);
         if (p) {
           root.setProperty("--magenta", p); root.setProperty("--magenta-dim", leagueRgba(p, 0.15)); root.setProperty("--magenta-glow", leagueRgba(p, 0.35));
           ["--loss", "--leader-pts", "--rank-1"].forEach(function(k) { root.setProperty(k, p); });
