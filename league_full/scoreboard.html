@@ -552,6 +552,13 @@ html.led .slide-dot { width: 7px; height: 7px; }
 html.led .slide-progress { flex: 0 0 auto; margin-top: 5px; }
 </style>
 <script src="league-config.js"></script>
+<script>/* branding v5: hide the built-in logos until the league branding is applied (max 3s), and use the last known branding at once */
+(function () {
+  try { var c = JSON.parse(localStorage.getItem("leagueBranding") || "null"); if (c && c.LEAGUE_NAME) document.title = c.LEAGUE_NAME + (document.title.indexOf("Knockout") >= 0 ? " — Knockouts" : ""); } catch (e) {}
+  document.documentElement.className += " brand-pending";
+  setTimeout(function () { document.documentElement.classList.remove("brand-pending"); }, 3000);
+})();</script>
+<style>html.brand-pending .header-left > .logo-left, html.brand-pending .header-center > .logo-center, html.brand-pending .header-center > .league-title { visibility: hidden; }</style>
 </head>
 <body>
 <script>
@@ -895,54 +902,75 @@ html.led .slide-progress { flex: 0 0 auto; margin-top: 5px; }
     var m = /^#?([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(String(v || "").trim()); if (!m) return null;
     var h = m[1]; if (h.length === 3) h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2]; return "#" + h.toLowerCase();
   }
+  // branding v5: applyLeagueBranding can run more than once (saved copy first, then the live Settings) and always
+  // ends in the same header: SPONSOR_LOGO_URL on the left (badminton graphic if none / broken), LOGO_URL in the centre
+  // (league name as text if none / broken, unless it is still the built-in league), built-in logo on the right.
+  var BRAND_LEFT = document.querySelector(".header-left .logo-left"), BRAND_CENTER = document.querySelector(".logo-center"), brandApplied = "";
+  var BRAND_LEFT_BOX = BRAND_LEFT && BRAND_LEFT.parentNode, BRAND_CENTER_BOX = BRAND_CENTER && BRAND_CENTER.parentNode;
+  function applyLeagueBranding(b) {
+    b = b || {}; var key = JSON.stringify(b); if (key === brandApplied) return; brandApplied = key;
+    var root = document.documentElement.style;
+    if (!document.getElementById("league-title-css")) {
+      var st = document.createElement("style"); st.id = "league-title-css";
+      st.textContent = ".league-title{text-align:center;max-width:60vw}.league-title h1{margin:0;font-family:'Barlow Condensed',sans-serif;font-size:clamp(28px,4.4vw,64px);font-weight:700;letter-spacing:.04em;text-transform:uppercase;line-height:1;background:linear-gradient(90deg,var(--magenta) 0%,var(--cyan) 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}.league-title .lt-sub{font-size:11px;font-weight:500;letter-spacing:.2em;text-transform:uppercase;color:var(--text-sub);margin-top:6px}.page-header .league-logo{width:auto;max-width:100%;object-fit:contain;transform:none;height:clamp(80px,10vw,150px)!important}@media (max-width:600px){.page-header .league-logo{height:clamp(48px,14vw,72px)!important}}html.led .page-header .league-logo{height:64px!important}html.led .league-title{max-width:300px}html.led .league-title h1{font-size:34px}";
+      document.head.appendChild(st);
+    }
+    if (b.LEAGUE_NAME) { document.title = b.LEAGUE_NAME + (document.title.indexOf("Knockout") >= 0 ? " — Knockouts" : ""); if (BRAND_CENTER) BRAND_CENTER.alt = b.LEAGUE_NAME; }
+    function put(slotParent, el) { // put el into the slot's place (whatever is there now)
+      var cur = slotParent && slotParent.querySelector(":scope > .logo-left, :scope > .logo-center, :scope > .league-title");
+      if (cur && cur !== el) cur.parentNode.replaceChild(el, cur);
+    }
+    // left: sponsor logo
+    var leftBox = BRAND_LEFT_BOX;
+    if (b.SPONSOR_LOGO_URL && leftBox) {
+      var lg = leftBox.querySelector(":scope > .league-logo") || document.createElement("img");
+      lg.className = "logo-left league-logo"; lg.alt = "Sponsor logo";
+      lg.onerror = function() { put(leftBox, BRAND_LEFT); };
+      var ls = leagueImg(b.SPONSOR_LOGO_URL); if (lg.getAttribute("src") !== ls) lg.src = ls;
+      put(leftBox, lg);
+    } else if (leftBox) put(leftBox, BRAND_LEFT);
+    // centre: league logo, or the league name as text
+    var centerBox = BRAND_CENTER_BOX;
+    function showLeagueName() {
+      if (!centerBox) return;
+      var lt = centerBox.querySelector(":scope > .league-title") || document.createElement("div"); lt.className = "league-title";
+      lt.innerHTML = "<h1>" + esc(b.LEAGUE_NAME) + "</h1>" + (b.LEAGUE_SUBTITLE ? '<div class="lt-sub">' + esc(b.LEAGUE_SUBTITLE) + "</div>" : "");
+      put(centerBox, lt);
+    }
+    if (centerBox) {
+      if (b.LOGO_URL) { BRAND_CENTER.onerror = function() { if (b.LEAGUE_NAME) showLeagueName(); }; var cs = leagueImg(b.LOGO_URL); if (BRAND_CENTER.getAttribute("src") !== cs) BRAND_CENTER.src = cs; put(centerBox, BRAND_CENTER); }
+      else if (b.LEAGUE_NAME && String(b.LEAGUE_NAME).trim() !== "CXO Baddy League") showLeagueName();
+    }
+      var p = leagueHex(b.COLOR_PRIMARY), s = leagueHex(b.COLOR_SECONDARY);
+      if (p) {
+        root.setProperty("--magenta", p); root.setProperty("--magenta-dim", leagueRgba(p, 0.15)); root.setProperty("--magenta-glow", leagueRgba(p, 0.35));
+        ["--loss", "--leader-pts", "--rank-1"].forEach(function(k) { root.setProperty(k, p); });
+      }
+      if (s) {
+        root.setProperty("--cyan", s); root.setProperty("--cyan-dim", leagueRgba(s, 0.12)); root.setProperty("--cyan-glow", leagueRgba(s, 0.35));
+        root.setProperty("--border", leagueRgba(s, 0.12)); root.setProperty("--border-hi", leagueRgba(s, 0.28));
+        ["--win", "--rank-2"].forEach(function(k) { root.setProperty(k, s); }); root.setProperty("--rank-3", leagueRgba(s, 0.55));
+      }
+      if (p || s) {
+        var P = p || "#dd0e23", S = s || "#0b49d3";
+        document.body.style.backgroundImage =
+          "radial-gradient(ellipse 80% 80% at -5% 100%, " + leagueRgba(P, 0.45) + " 0%, " + leagueRgba(P, 0.15) + " 40%, transparent 65%)," +
+          "radial-gradient(ellipse 70% 90% at 105% 50%, " + leagueRgba(S, 0.40) + " 0%, " + leagueRgba(S, 0.12) + " 45%, transparent 70%)," +
+          "radial-gradient(ellipse 50% 60% at 50% 50%, rgba(30,10,50,0.5) 0%, transparent 80%)";
+      }
+    document.documentElement.classList.remove("brand-pending");
+  }
   function loadLeagueBranding() {
+    try { var saved = JSON.parse(localStorage.getItem("leagueBranding") || "null"); if (saved) applyLeagueBranding(saved); } catch (e) {}
     fetch(leagueApiBase() + "?view=config&t=" + Date.now(), { cache: "no-store" })
       .then(function(r) { return r.json(); })
       .then(function(cfg) {
-        if (!cfg) return;
+        if (!cfg || !cfg.branding) return;
         (cfg.stageOrder || []).forEach(function(s) { if (cfg.stages && cfg.stages[s]) STAGE_RANK[s] = Number(cfg.stages[s].order); });
-        var b = cfg.branding || {}, root = document.documentElement.style;
-        var center = document.querySelector(".logo-center"), right = document.querySelector(".logo-right");
-        if (b.LEAGUE_NAME) { document.title = b.LEAGUE_NAME + (document.title.indexOf("Knockout") >= 0 ? " — Knockouts" : ""); if (center) center.alt = b.LEAGUE_NAME; }
-        // branding v4: SPONSOR_LOGO_URL replaces the left badminton graphic (graphic comes back if it fails to load);
-        // LOGO_URL is the centre logo; with no LOGO_URL a new LEAGUE_NAME is shown as centre text; right logo stays built in
-        if (!document.getElementById("league-title-css")) {
-          var st = document.createElement("style"); st.id = "league-title-css";
-          st.textContent = ".league-title{text-align:center;max-width:60vw}.league-title h1{margin:0;font-family:'Barlow Condensed',sans-serif;font-size:clamp(28px,4.4vw,64px);font-weight:700;letter-spacing:.04em;text-transform:uppercase;line-height:1;background:linear-gradient(90deg,var(--magenta) 0%,var(--cyan) 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}.league-title .lt-sub{font-size:11px;font-weight:500;letter-spacing:.2em;text-transform:uppercase;color:var(--text-sub);margin-top:6px}.page-header .league-logo{width:auto;max-width:100%;object-fit:contain;transform:none;height:clamp(80px,10vw,150px)!important}@media (max-width:600px){.page-header .league-logo{height:clamp(48px,14vw,72px)!important}}html.led .page-header .league-logo{height:64px!important}html.led .league-title{max-width:300px}html.led .league-title h1{font-size:34px}";
-          document.head.appendChild(st);
-        }
-        var left = document.querySelector(".logo-left");
-        if (b.SPONSOR_LOGO_URL && left && !document.querySelector(".league-logo")) {
-          var lg = document.createElement("img"); lg.className = "logo-left league-logo"; lg.alt = "Sponsor logo";
-          lg.onerror = function() { if (lg.parentNode) lg.parentNode.replaceChild(left, lg); };
-          lg.src = leagueImg(b.SPONSOR_LOGO_URL); left.parentNode.replaceChild(lg, left);
-        }
-        function showLeagueName() {
-          if (!center || !center.parentNode || !b.LEAGUE_NAME) return;
-          var lt = document.createElement("div"); lt.className = "league-title";
-          lt.innerHTML = "<h1>" + esc(b.LEAGUE_NAME) + "</h1>" + (b.LEAGUE_SUBTITLE ? '<div class="lt-sub">' + esc(b.LEAGUE_SUBTITLE) + "</div>" : "");
-          center.parentNode.replaceChild(lt, center);
-        }
-        if (b.LOGO_URL && center) { center.onerror = showLeagueName; center.src = leagueImg(b.LOGO_URL); }
-        else if (b.LEAGUE_NAME && String(b.LEAGUE_NAME).trim() !== "CXO Baddy League") showLeagueName();
-        var p = leagueHex(b.COLOR_PRIMARY), s = leagueHex(b.COLOR_SECONDARY);
-        if (p) {
-          root.setProperty("--magenta", p); root.setProperty("--magenta-dim", leagueRgba(p, 0.15)); root.setProperty("--magenta-glow", leagueRgba(p, 0.35));
-          ["--loss", "--leader-pts", "--rank-1"].forEach(function(k) { root.setProperty(k, p); });
-        }
-        if (s) {
-          root.setProperty("--cyan", s); root.setProperty("--cyan-dim", leagueRgba(s, 0.12)); root.setProperty("--cyan-glow", leagueRgba(s, 0.35));
-          root.setProperty("--border", leagueRgba(s, 0.12)); root.setProperty("--border-hi", leagueRgba(s, 0.28));
-          ["--win", "--rank-2"].forEach(function(k) { root.setProperty(k, s); }); root.setProperty("--rank-3", leagueRgba(s, 0.55));
-        }
-        if (p || s) {
-          var P = p || "#dd0e23", S = s || "#0b49d3";
-          document.body.style.backgroundImage =
-            "radial-gradient(ellipse 80% 80% at -5% 100%, " + leagueRgba(P, 0.45) + " 0%, " + leagueRgba(P, 0.15) + " 40%, transparent 65%)," +
-            "radial-gradient(ellipse 70% 90% at 105% 50%, " + leagueRgba(S, 0.40) + " 0%, " + leagueRgba(S, 0.12) + " 45%, transparent 70%)," +
-            "radial-gradient(ellipse 50% 60% at 50% 50%, rgba(30,10,50,0.5) 0%, transparent 80%)";
-        }
-      }).catch(function() { /* keep the built-in look */ });
+        try { localStorage.setItem("leagueBranding", JSON.stringify(cfg.branding)); } catch (e) {}
+        applyLeagueBranding(cfg.branding);
+      }).catch(function() { /* keep the saved / built-in look */ })
+      .then(function() { document.documentElement.classList.remove("brand-pending"); });
   }
 
   // ---- added: Live Courts strip (matches with Status = Live) ----
