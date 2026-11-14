@@ -63,10 +63,11 @@ PINs are **never** stored in the sheet or the pages. They live in Apps Script �
    | Key | What it does |
    |---|---|
    | `LEAGUE_NAME`, `LEAGUE_SUBTITLE` | Title on every page and browser tab |
-   | `LOGO_URL`, `SPONSOR_LOGO_URL` | Centre logo and right-hand logo (**direct https image links**; Google Drive share links usually don't work). Blank keeps the built-in logo |
+   | `LOGO_URL`, `SPONSOR_LOGO_URL` | `LOGO_URL` = centre logo (blank: the league name is shown as text). `SPONSOR_LOGO_URL` = left logo, in place of the badminton graphic. The right-hand logo is built in. Use https image links (a file in the GitHub folder is best; a Drive share link set to "Anyone with the link" is converted automatically) |
    | `COLOR_PRIMARY`, `COLOR_SECONDARY` | The two accent colours (hex, e.g. `#dd0e23`). Background glow, highlights and ranks follow them |
    | `COURTS` | Number of courts |
-   | `QUALIFIERS_PER_GROUP` | How many teams per group can become seeds (default 2) |
+   | `QUALIFIERS_PER_GROUP` | How many teams from each round 1 group go through to round 2 (default 2: winner and runner-up) |
+   | `ROUND2_GROUP_SIZE` | Only when round 2 is a league: teams in each new group (default 4). Must be a multiple of `QUALIFIERS_PER_GROUP` |
    | `LEAGUE_POINTS_PER_WIN` / `_PER_LOSS` | Points shown in the table (display only; **not used for ranking**) |
    | `POLL_MS` | Umpire and referee refresh (default 5000 ms) |
    | `PLAYER_POLL_MS` | Player page refresh (20000 ms; use 30000 for a big crowd) |
@@ -75,9 +76,9 @@ PINs are **never** stored in the sheet or the pages. They live in Apps Script �
 2. **Config tab: define the rounds** in the order they're played (see §5).
 3. **Start clean.** On a reused sheet, clear the data rows of `Matches`, `Teams` and `Log` (keep the header row), then run **League → Update standings & knockout now**. `clearAllData()` does the same from the editor.
 4. **Teams.** Referee page → Teams & links → paste `Team Name<TAB>Group` rows → Save.
-5. **League matches.** Referee page → Add → Bulk add, pasting `Match ID | Stage | Group | Court | Queue Order | Team A | Team B`. Leave Match ID blank to get M1, M2, …, and leave Queue Order blank to add to the end of that court's queue.
-6. **Later league rounds** (if any). Add them with new group names and slots (see §5).
-7. **Knockout.** In the sheet: **League → Create knockout draw (1st v last)**, then type how many teams go through (see §7).
+5. **Round 1 league matches.** In the sheet: **League → Create round 1 league matches (from Teams tab)**. Every team plays every other team in its group, spread over all courts (see §5a). No typing of fixtures needed. (Bulk add on the referee page still works if you want your own order.)
+6. **Round 2.** Set `QUALIFIERS_PER_GROUP` (and `ROUND2_GROUP_SIZE` for a league round 2) in Settings, then **League → Create round 2 matches**. It looks at the Config tab: if the round after round 1 is a knockout it makes the 1st-group-v-last-group draw; if it is a league (e.g. `League 2`) it makes the new groups. Teams fill in by themselves when round 1 ends (see §5a and §7).
+7. **Later rounds** after a league round 2: **League → Create seeded knockout draw (Seed 1 v last seed)** (see §7).
 8. **Links.** Referee page → Teams & links → Generate team links → Print QR sheet for captains.
 9. **Umpires.** Give each umpire their court PIN and the umpire.html link, and ask them to Add to Home Screen.
 10. **Rehearse.** On a copy of the sheet, run a few matches end to end. On the real sheet, run `resetScores()` afterwards to wipe test scores and keep the fixtures.
@@ -140,6 +141,27 @@ Examples:
 2. Bulk add its matches with Stage = `League 2`, a **new group name** not used before (e.g. `R2-A`, `R2-B`), and **slots** instead of team names (e.g. `Seed 1` v `Seed 4`).
 3. When the previous league round finishes, the teams fill in automatically, and the round gets its own table on Sheet1 and the LED scoreboard.
 
+### 5a. Creating the matches automatically (League menu in the sheet)
+
+**Create round 1 league matches (from Teams tab)**
+- Reads the Teams tab. Every group plays a full round robin (a group of 5 gets a bye each turn).
+- Matches are added as M1, M2, … with Stage = the first league round in Config (e.g. `Group`).
+- They're spread over `COURTS` courts in turns: each turn every court gets one match (same Queue Order on every court), no team is on two courts at once, and a team that just played is rested for the next turn whenever possible. Groups are mixed so every group keeps moving.
+- Run it once. If that round already has matches it refuses (delete them first).
+- Adding a team later: add it to the Teams tab, delete that round's matches, run it again (before play starts), or bulk add just the new team's matches.
+
+**Create round 2 matches**: works from the round after round 1 in the Config tab.
+- **Knockout round 2** (by group number, 1st group v last group, always):
+  - 2 per group, 8 groups: G1 1st v G8 2nd, G2 1st v G7 2nd, G3 1st v G6 2nd, G4 1st v G5 2nd (top half) and G8 1st v G1 2nd, G7 1st v G2 2nd, G6 1st v G3 2nd, G5 1st v G4 2nd (bottom half). A group's winner and runner-up are in different halves, so they can only meet in the Final. Next rounds: first match v last match in each half (QF1 = PQF1 v PQF4).
+  - 1 per group: G1 1st v G8 1st, G2 1st v G7 1st, …
+  - Works for 2, 4, 8 or 16 groups with 1 or 2 going through. Any other mix (e.g. 6 groups) can't be paired group v group without byes, so it makes the seeded draw (Seed 1 v last seed) instead and says so.
+- **League round 2** (Config row named `League 2` or similar, see above):
+  - Makes new groups `Pool A`, `Pool B`, … of `ROUND2_GROUP_SIZE` teams. Each pool gets the same number of winners and runners-up.
+  - Winners go G1 → Pool A, G2 → Pool B, …; runners-up go from the last group first (1st group meets last group). Two teams from the same round 1 group are **never** put in the same pool.
+  - Example, 8 groups, 2 through, size 4: Pool A = G1 1st, G5 1st, G8 2nd, G4 2nd; Pool B = G2 1st, G6 1st, G7 2nd, G3 2nd; …
+  - Matches continue the queue after round 1 and are placeholders (`G1 1st`) until round 1 is finished; then the real teams fill in. Ties show in the Qualifiers tab for a Manual Team as usual.
+  - It refuses (with the reason) if the numbers don't split evenly, e.g. 16 teams into groups of 6.
+
 **Rules for group names:** each group name must be unique across all rounds. Round-1 groups come from the Teams tab; later rounds take their group from the match rows. A later-round league match with no Group is treated as one table named after the round.
 
 ---
@@ -178,7 +200,7 @@ Example: 36 teams in 6 groups, top 10 go through, `QUALIFIERS_PER_GROUP` = 2. Se
 
 ## 7. Knockout draw (always 1st v last)
 
-In the sheet: **League → Create knockout draw (1st v last)**, then type how many teams go through (2 to 64).
+For a knockout straight after round 1, use **League → Create round 2 matches** (group v group, §5a). For a seeded draw (e.g. after a league round 2), use **League → Create seeded knockout draw (Seed 1 v last seed)**, then type how many teams go through (2 to 64).
 
 - **First knockout round:** Seed 1 v last seed, Seed 2 v second-last, and so on.
 - **Every later round:** winner of the first match v winner of the last match. For example QF1 = PQF1 v PQF8, QF2 = PQF2 v PQF7; SF1 = QF1 v QF4, SF2 = QF2 v QF3; then the Final.
