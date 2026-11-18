@@ -705,7 +705,8 @@ html.led .slide-progress { flex: 0 0 auto; margin-top: 5px; }
         lost:   Number(r["Matches Lost"]  || 0),
         points: Number(r["Total Points"]  || 0),
         diff:   Number(r["Point Diff"]    || 0),
-        rank:   Number(r["Rank"]          || 0)
+        rank:   Number(r["Rank"]          || 0),
+        show:   String(r["Show"] === undefined ? "" : r["Show"]).trim().toLowerCase()
       };
     }).filter(function(r) { return r.group && r.team; });
   }
@@ -864,7 +865,7 @@ html.led .slide-progress { flex: 0 0 auto; margin-top: 5px; }
     });
 
     allGroupData  = groups;
-    allGroupNames = Object.keys(groups).sort();
+    allGroupNames = Object.keys(groups); // rounds-v1: keep the sheet's order (round by round, Group 2 before Group 10)
 
     // Keep slideIndex in bounds if groups changed
     if (slideIndex >= totalSlides()) slideIndex = 0;
@@ -1007,6 +1008,9 @@ html.led .slide-progress { flex: 0 0 auto; margin-top: 5px; }
       var data = await res.json();
       var rows = parseJson(data);
       if (!rows.length) throw new Error("empty");
+      // rounds-v1: leave out rounds set to No in the Config tab ("Show on scoreboard"); everything if all are No
+      var shown = rows.filter(function(r) { return r.show !== "no"; });
+      if (shown.length) rows = shown;
       lastGoodRows = rows;
       render(rows);
       dot.classList.remove("error");
